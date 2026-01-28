@@ -187,7 +187,7 @@ function initLeafletMap(container, points) {
     });
   }
 
-  fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json') //Nice guy who have a json file for Canada shape. Not the most precise, but good enough. Blessh im.
+  fetch('https://raw.githubusercontent.com/bfjia/iMicroSeq_Dashboard/refs/heads/main/data/CAN.geo.json') //Nice guy who have a json file for Canada shape. Not the most precise, but good enough. Blessh im.
     .then((r) => r.json())
     .then((geojson) => {
       L.geoJSON(geojson, {
