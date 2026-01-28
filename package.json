@@ -1,0 +1,26 @@
+{
+  "name": "microseq-dashboard",
+  "version": "1.0.0",
+  "description": "Database front-page dashboard using Node.js and Vega/Vega-Lite",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "NODE_ENV=development node src/server.js"
+  },
+  "keywords": [
+    "dashboard",
+    "vega",
+    "vega-lite",
+    "node",
+    "express"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "d3-dsv": "3.0.1",
+    "express": "5.2.1"
+  }
+}

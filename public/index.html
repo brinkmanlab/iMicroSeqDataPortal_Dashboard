@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iMicroSeq Data Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega@6.2.0/build/vega.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@6.4.2/build/vega-lite.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@7.1.0/build/vega-embed.min.js"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-logo-area">
+        <div class="header-logo-panel">
+          <a href="https://imicroseq-dataportal.ca/"><img src="./img/imicroseq-logo.png" alt="iMicroSeq" class="header-logo-img" /></a>
+        </div>
+      </div>
+      <nav class="header-nav">
+        <a href="#" class="header-link">X<span class="header-chevron" aria-hidden="true">▼</span></a>
+      </nav>
+    </header>
+
+    <main class="page">
+      <header class="page-title">
+
+        <h1 class="page-title-text">At a Glance:</h1>
+        <span class="page-title-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 31 27" fill="currentColor">
+            <path d="M15.5 0l-2.708 5.278c-.307.574-.857.52-1.408.2l-1.96-1.06 1.46 8.107c.308 1.481-.678 1.481-1.164.841L6.3 9.363l-.556 2.033c-.064.267-.345.547-.768.48l-4.325-.95 1.136 4.318c.243.96.433 1.358-.245 1.612L0 17.613l7.445 6.323c.295.239.444.669.34 1.058l-.653 2.236c2.564-.31 4.863-.586 7.426-.894.228-.003.605.2.604.474l-.34 8.19h1.247l-.196-8.173c-.002-.274.34-.494.568-.491l7.426.894-.651-2.236c-.105-.39.044-.82.338-1.058L31 17.613l-1.542-.757c-.678-.254-.489-.652-.245-1.612l1.136-4.318-4.325.95c-.423.067-.704-.213-.768-.48L24.7 9.363l-3.42 4.003c-.487.64-1.472.64-1.165-.84l1.461-8.109-1.96 1.062c-.55.32-1.1.373-1.408-.2L15.5 0z"/>
+          </svg>
+        </span>
+        <h1 class="page-title-text">The Canadian iMicroSeq Data Portal</h1>
+
+      </header>
+      <section class="hero-cards lazy-section">
+        <article class="hero-card">
+          <div class="hero-label">Samples</div>
+          <div class="hero-value" id="records-count">–</div>
+          <div class="hero-subtext">Total Samples in Database</div>
+        </article>
+        <article class="hero-card">
+          <div class="hero-label">Sites</div>
+          <div class="hero-value" id="countries-count">–</div>
+          <div class="hero-subtext">Unique Sampling Sites</div>
+        </article>
+        <article class="hero-card">
+          <div class="hero-label">Organisms</div>
+          <div class="hero-value" id="organism-count">–</div>
+          <div class="hero-subtext">Unique Species</div>
+        </article>
+        <article class="hero-card">
+          <div class="hero-label">Data Sources</div>
+          <div class="hero-value" id="data-sources">–</div>
+          <div class="hero-subtext">Organisations Collecting Samples</div>
+        </article>
+      </section>
+
+      <section class="panel-grid">
+        <section class="panel lazy-section" data-chart="growth">
+          <header class="panel-header">
+            <h2>Database Growth Over Time</h2>
+            <span class="panel-subtitle">Samples Taken Per Year</span>
+          </header>
+          <div id="growth-chart" class="chart-medium" aria-label="Database growth area chart"></div>
+        </section>
+
+        <section class="panel lazy-section" data-chart="breakdown">
+          <header class="panel-header">
+            <h2>Data Breakdown</h2>
+            <span class="panel-subtitle">By Sample Type And Sample Year</span>
+          </header>
+          <div id="breakdown-chart" class="chart-medium"></div>
+        </section>
+      </section>
+
+      <section class="panel panel-wide lazy-section" data-chart="coverage">
+          <header class="panel-header">
+            <h2>Data Coverage</h2>
+            <span class="panel-subtitle">Sample density by latitude/longitude</span>
+          </header>
+          <div id="coverage-chart" class="chart-large"></div>
+      </section>
+
+      <section class="explore-panel lazy-section" data-chart="sample">
+        <header class="explore-header">
+          <div class="explore-kicker">
+            <span class="explore-badge">Explore</span>
+            <span class="explore-kicker-text">Inside the iMicroSeq Data Portal</span>
+          </div>
+          <p class="explore-subtitle">
+            A brief, interactive data visualizer
+          </p>
+        </header>
+
+        <div class="explore-content">
+          <div class="explore-chart-area">
+            <div class="axis-selects">
+              <label class="field-select">
+                <span class="label">Plot type</span>
+                <select id="sample-chart-plot-type">
+                  <option value="stacked-bar">Stacked bar</option>
+                  <option value="line">Line</option>
+                </select>
+              </label>
+              <label class="field-select">
+                <span class="label">X axis</span>
+                <select id="sample-chart-x"></select>
+              </label>
+              <label class="field-select" id="sample-chart-y-wrap">
+                <span class="label">Segment By</span>
+                <select id="sample-chart-y"></select>
+              </label>
+            </div>
+            <div id="sample-chart" class="sample-chart"></div>
+          </div>
+
+          <div class="explore-actions">
+            <button type="button" class="explore-cta" onclick="window.location.href='https://portal-ui.imicroseq-dataportal.ca/explorer/environmental'">View the data on the iMicroSeq Data Portal</button>
+            <button type="button" class="primary-cta" onclick="window.location.href='./dashboard.html'">Visualize the data on the Interactive Dashboard</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
+
