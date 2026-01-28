@@ -1,12 +1,11 @@
-const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const { tsvParse, csvParse } = require('d3-dsv');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DATA_PATH = path.join(__dirname, '..', 'data', 'imicroseq.tsv');
-const PROVINCE_COORDS_PATH = path.join(__dirname, '..', 'data', 'ProvinceCapitalCoords.csv');
+const DATA_URL = 'https://raw.githubusercontent.com/bfjia/iMicroSeq_Dashboard/refs/heads/main/data/imicroseq.tsv';
+const PROVINCE_COORDS_URL = 'https://raw.githubusercontent.com/bfjia/iMicroSeq_Dashboard/refs/heads/main/data/ProvinceCapitalCoords.csv';
 
 function parseLatLon(raw, kind) {
   // Handles values like "43.8278276418 N" or "79.0364341912 W"
@@ -34,19 +33,24 @@ function parseLatLon(raw, kind) {
 }
 
 /**
- * Parse the TSV file and compute the structures used by the dashboard.
- * This is done synchronously on startup for simplicity. If the file becomes
- * very large or changes frequently, you could switch this to a streaming
- * or cached, periodically-refreshed implementation.
+ * Parse the TSV/CSV from URLs and compute the structures used by the dashboard.
+ * Data is fetched from GitHub on startup. If the file becomes very large or
+ * changes frequently, you could add caching or periodic refresh.
  */
-function loadDashboardData() {
-  const raw = fs.readFileSync(DATA_PATH, 'utf8');
+async function loadDashboardData() {
+  const [tsvRes, csvRes] = await Promise.all([
+    fetch(DATA_URL),
+    fetch(PROVINCE_COORDS_URL)
+  ]);
+  if (!tsvRes.ok) throw new Error(`Failed to load TSV: ${tsvRes.status} ${tsvRes.statusText}`);
+  const raw = await tsvRes.text();
   const rows = tsvParse(raw);
 
   // Province/state name -> { lat, lon } for fallback when row has no lat/long
   const provinceCoords = new Map();
   try {
-    const provinceCsv = fs.readFileSync(PROVINCE_COORDS_PATH, 'utf8');
+    if (!csvRes.ok) throw new Error(`${csvRes.status} ${csvRes.statusText}`);
+    const provinceCsv = await csvRes.text();
     const provinceRows = csvParse(provinceCsv);
     provinceRows.forEach((r) => {
       const name = (r.Province || '').trim();
@@ -273,16 +277,28 @@ function loadDashboardData() {
   return result;
 }
 
-const dashboardData = loadDashboardData();
+let dashboardData = null;
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.get('/api/dashboard', (_req, res) => {
+  if (dashboardData == null) {
+    return res.status(503).json({ error: 'Dashboard data not yet loaded' });
+  }
   res.json(dashboardData);
 });
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Dashboard server listening on http://localhost:${PORT}`);
-});
+(async () => {
+  try {
+    dashboardData = await loadDashboardData();
+    app.listen(PORT, () => {
+      // eslint-disable-next-line no-console
+      console.log(`Dashboard server listening on http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to load dashboard data:', err.message);
+    process.exitCode = 1;
+  }
+})();
 
