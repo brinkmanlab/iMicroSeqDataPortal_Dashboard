@@ -1,0 +1,12 @@
+name = "imicroseq-dashboard"
+main = "cf-worker/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+routes = [
+  { pattern = "imicroseq-dashboard.bfjia.net", zone_name = "bfjia.net", custom_domain = true }
+]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
