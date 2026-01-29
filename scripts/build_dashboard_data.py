@@ -114,6 +114,8 @@ def main() -> None:
 
         lat = parse_lat_lon(row.get("geo loc latitude"), "lat")
         lon = parse_lat_lon(row.get("geo loc longitude"), "lon")
+        if lon != None and lon > 0:
+            print("hello")
         if lat is None or lon is None:
             state_province = (
                 row.get("geo loc name (state/province/territory)") or ""
@@ -237,16 +239,16 @@ def main() -> None:
     with gzip.open(OUTPUT_JSON_GZ_PUBLIC, "wb", compresslevel=6) as f:
         f.write(json_bytes)
 
-    if sample_field_spec_rows:
-        sample_keys = list(sample_field_spec_rows[0].keys())
-        with open(OUTPUT_TSV, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=sample_keys, delimiter="\t")
-            w.writeheader()
-            for r in sample_field_spec_rows:
-                w.writerow({k: ("" if v is None else v) for k, v in r.items()})
+    # if sample_field_spec_rows:
+    #     sample_keys = list(sample_field_spec_rows[0].keys())
+    #     with open(OUTPUT_TSV, "w", newline="", encoding="utf-8") as f:
+    #         w = csv.DictWriter(f, fieldnames=sample_keys, delimiter="\t")
+    #         w.writeheader()
+    #         for r in sample_field_spec_rows:
+    #             w.writerow({k: ("" if v is None else v) for k, v in r.items()})
 
     print(f"Wrote {OUTPUT_JSON} ({total_records} records)")
-    print(f"Wrote {OUTPUT_TSV}")
+    # print(f"Wrote {OUTPUT_TSV}")
     print(f"Wrote {OUTPUT_JSON_GZ_PUBLIC} (gzip for Worker assets)")
 
 

@@ -1,7 +1,7 @@
 {
-  "name": "microseq-dashboard",
+  "name": "imicroseq-dashboard",
   "version": "1.0.0",
-  "description": "Database front-page dashboard using Cloudflare Workers and Vega/Vega-Lite",
+  "description": "Dashboard for the iMicroSeq Data Portal",
   "main": "cf-worker/index.ts",
   "scripts": {
     "start": "wrangler dev",
