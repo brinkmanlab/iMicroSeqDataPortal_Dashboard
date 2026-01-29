@@ -1,5 +1,4 @@
-// Inline TSV/CSV parsers (no eval/new Function) — Workers disallow code generation
-
+//Need custom TSV/CSV parsers because Workers disallow code generation from d3
 /** Parse tab-separated text into an array of row objects keyed by first-line headers */
 function parseTSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
