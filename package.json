@@ -1,11 +1,11 @@
 {
   "name": "microseq-dashboard",
   "version": "1.0.0",
-  "description": "Database front-page dashboard using Node.js and Vega/Vega-Lite",
-  "main": "src/server.js",
+  "description": "Database front-page dashboard using Cloudflare Workers and Vega/Vega-Lite",
+  "main": "cf-worker/index.ts",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "NODE_ENV=development node src/server.js",
+    "start": "wrangler dev",
+    "dev": "wrangler dev",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy"
   },
@@ -13,17 +13,13 @@
     "dashboard",
     "vega",
     "vega-lite",
-    "node",
-    "express"
+    "cloudflare",
+    "workers"
   ],
   "author": "",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
-  },
-  "dependencies": {
-    "d3-dsv": "3.0.1",
-    "express": "5.2.1"
   },
   "devDependencies": {
     "wrangler": "^4.61.0"

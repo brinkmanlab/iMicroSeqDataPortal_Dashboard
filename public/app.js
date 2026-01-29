@@ -1,3 +1,4 @@
+// Fetch aggregated dashboard data from the Cloudflare Worker API
 async function fetchDashboardData() {
   const res = await fetch('/api/dashboard');
   if (!res.ok) {
@@ -6,6 +7,7 @@ async function fetchDashboardData() {
   return res.json();
 }
 
+// Format large numbers as K/M for summary cards
 function formatNumber(value) {
   if (value == null) return '–';
   if (value >= 1_000_000) {
@@ -17,6 +19,7 @@ function formatNumber(value) {
   return value.toString();
 }
 
+// Animate a numeric element from 0 to targetValue over durationMs (easeOutCubic)
 function animateCount(el, targetValue, durationMs = 900) {
   if (!el) return;
   if (targetValue == null || !Number.isFinite(targetValue)) {
@@ -39,6 +42,7 @@ function animateCount(el, targetValue, durationMs = 900) {
   requestAnimationFrame(tick);
 }
 
+// Populate the four hero cards with animated counts from API summary
 function populateSummary(summary) {
   animateCount(document.getElementById('records-count'), summary.records);
   animateCount(document.getElementById('countries-count'), summary.sites);
@@ -46,6 +50,7 @@ function populateSummary(summary) {
   animateCount(document.getElementById('data-sources'), summary.dataSources);
 }
 
+// Vega-Lite spec: cumulative growth area chart (year vs samples)
 function createGrowthSpec(data) {
   return {
     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
@@ -90,6 +95,7 @@ function createGrowthSpec(data) {
   };
 }
 
+// Vega-Lite spec: stacked bar chart by year and category (unused; pie used instead)
 function createBreakdownBarSpec(data) {
   return {
     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
@@ -131,6 +137,7 @@ function createBreakdownBarSpec(data) {
   };
 }
 
+// Vega-Lite spec: category breakdown pie chart
 function createBreakdownPieSpec(data) {
   return {
     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
@@ -140,7 +147,7 @@ function createBreakdownPieSpec(data) {
     data: { values: data },
     mark: { type: 'arc', tooltip: true },
     encoding: {
-      theta: { field: 'value', type: 'quantitative' },   // Pie slice size
+      theta: { field: 'value', type: 'quantitative' }, // Pie slice size
       color: { 
         field: 'category', 
         type: 'nominal',
@@ -157,15 +164,17 @@ function createBreakdownPieSpec(data) {
   };
 }
 
-
+// Initialize Leaflet map: CARTO basemap, Canada GeoJSON overlay, circle markers for sample density
 function initLeafletMap(container, points) {
   if (!container || typeof L === 'undefined') return;
   container.innerHTML = '';
   const map = L.map(container, { scrollWheelZoom: true }).setView([62.5, -96], 3);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {//draw the world map using the CARTO maps
+  // CARTO light basemap
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://carto.com/">CARTO</a>', 
     maxZoom: 19
   }).addTo(map);
+  // Add circle markers scaled by sample count; tooltip shows count and lat/lon
   function addPoints() {
     if (!points || points.length === 0) return;
     const maxCount = Math.max(...points.map((d) => d.count), 1);
@@ -187,7 +196,8 @@ function initLeafletMap(container, points) {
     });
   }
 
-  fetch('https://raw.githubusercontent.com/bfjia/iMicroSeq_Dashboard/refs/heads/main/data/CAN.geo.json') //Nice guy who have a json file for Canada shape. Not the most precise, but good enough. Blessh im.
+  // Canada GeoJSON overlay (simplified shape); then add sample points
+  fetch('https://raw.githubusercontent.com/bfjia/iMicroSeq_Dashboard/refs/heads/main/data/CAN.geo.json')
     .then((r) => r.json())
     .then((geojson) => {
       L.geoJSON(geojson, {
@@ -206,8 +216,10 @@ function initLeafletMap(container, points) {
 }
 
 
+// Max number of top categories to show in Explore chart (rest collapsed)
 const SAMPLE_FIELD_SPEC_MAX_LINES = 12;
 
+// Axis field options for Explore chart dropdowns (fallback if API doesn't provide)
 const AXIS_OPTIONS = [
   { value: 'organism', label: 'organism' },
   { value: 'purpose of sampling', label: 'purpose of sampling' },
@@ -219,6 +231,7 @@ const AXIS_OPTIONS = [
   { value: 'Year-Month', label: 'Year-Month' }
 ];
 
+// Get display value for a field from a sample row (handles Year/Year-Month and empty/–)
 function getAxisValue(row, field) {
   const v = field === 'Year' ? row.Year : field === 'Year-Month' ? row['Year-Month'] : row[field];
   if (v === undefined || v === null) return null;
@@ -226,6 +239,7 @@ function getAxisValue(row, field) {
   return s === '' || s === '--' ? null : (field === 'Year' ? v : s);
 }
 
+// Aggregate sample rows into x/y/count for stacked bar; top N y-categories, sorted by total
 function aggregateForSampleChart(rows, xField, yField) {
   const countBy = new Map();
   const xValues = new Set();
@@ -272,6 +286,7 @@ function aggregateForSampleChart(rows, xField, yField) {
   return { data: filtered, xSorted, xIsYear, xIsYearMonth };
 }
 
+// Aggregate sample rows into x/count for line chart
 function aggregateForLineChart(rows, xField) {
   const countBy = new Map();
   const xValues = new Set();
@@ -300,6 +315,7 @@ function aggregateForLineChart(rows, xField) {
   return { data, xSorted, xIsYear };
 }
 
+// Vega-Lite spec: line chart for Explore (single axis); empty state shows "No data for selected axis"
 function createLineSpec(aggregated, xField) {
   const { data, xSorted, xIsYear } = aggregated;
   if (!data || data.length === 0) {
@@ -345,6 +361,7 @@ function createLineSpec(aggregated, xField) {
   };
 }
 
+// Vega-Lite spec: stacked bar for Explore (x vs yCategory, count); empty state shows "No data for selected axes"
 function createSampleFieldSpec(aggregated, xField, yField) {
   const { data, xSorted, xIsYear } = aggregated;
   if (!data || data.length === 0) {
@@ -404,23 +421,27 @@ function createSampleFieldSpec(aggregated, xField, yField) {
   };
 }
 
+// Render growth area chart in #growth-chart
 function initGrowthChart(data) {
   return vegaEmbed('#growth-chart', createGrowthSpec(data.growth), {
     actions: false
   });
 }
 
+// Render breakdown pie chart in #breakdown-chart
 function initBreakdownChart(data) {
   return vegaEmbed('#breakdown-chart', createBreakdownPieSpec(data.breakdown), {
     actions: false
   });
 }
 
+// Render coverage map in #coverage-chart using Leaflet
 function initCoverageMap(data) {
   const container = document.getElementById('coverage-chart');
   initLeafletMap(container, data.coveragePoints || []);
 }
 
+// Set up Explore chart: axis selects, plot type (line vs stacked bar), and lazy vegaEmbed on change
 function initSampleChart(data) {
   const plotTypeSelect = document.getElementById('sample-chart-plot-type');
   const xSelect = document.getElementById('sample-chart-x');
@@ -445,6 +466,7 @@ function initSampleChart(data) {
 
   const yWrap = document.getElementById('sample-chart-y-wrap');
 
+  // Re-aggregate and re-render when plot type or axes change
   const updateSampleChart = async () => {
     const plotType = plotTypeSelect.value;
     const xField = xSelect.value;
@@ -479,6 +501,7 @@ function initSampleChart(data) {
   return updateSampleChart();
 }
 
+// Entry: fetch data, populate summary, lazy-load charts when sections scroll into view
 async function initDashboard() {
   try {
     const data = await fetchDashboardData();
@@ -487,6 +510,7 @@ async function initDashboard() {
 
     const loadedCharts = new Set();
 
+    // Lazy-load each chart only when its .lazy-section becomes visible
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {

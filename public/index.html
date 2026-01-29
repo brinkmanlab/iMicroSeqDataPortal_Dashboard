@@ -5,13 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>iMicroSeq Data Dashboard</title>
     <link rel="stylesheet" href="styles.css" />
+    <!-- Leaflet for coverage map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <!-- Vega/Vega-Lite for charts -->
     <script src="https://cdn.jsdelivr.net/npm/vega@6.2.0/build/vega.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite@6.4.2/build/vega-lite.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-embed@7.1.0/build/vega-embed.min.js"></script>
   </head>
   <body>
+    <!-- Sticky header: logo (links to iMicroSeq portal) + nav -->
     <header class="site-header">
       <div class="header-logo-area">
         <div class="header-logo-panel">
@@ -24,6 +27,7 @@
     </header>
 
     <main class="page">
+      <!-- Page title with star icon -->
       <header class="page-title">
 
         <h1 class="page-title-text">At a Glance:</h1>
@@ -35,6 +39,7 @@
         <h1 class="page-title-text">The Canadian iMicroSeq Data Portal</h1>
 
       </header>
+      <!-- Summary cards: records, sites, organisms, data sources (populated by app.js) -->
       <section class="hero-cards lazy-section">
         <article class="hero-card">
           <div class="hero-label">Samples</div>
@@ -58,6 +63,7 @@
         </article>
       </section>
 
+      <!-- Growth and breakdown charts (lazy-loaded when in view) -->
       <section class="panel-grid">
         <section class="panel lazy-section" data-chart="growth">
           <header class="panel-header">
@@ -76,6 +82,7 @@
         </section>
       </section>
 
+      <!-- Coverage map: Leaflet + Canada GeoJSON + sample points -->
       <section class="panel panel-wide lazy-section" data-chart="coverage">
           <header class="panel-header">
             <h2>Data Coverage</h2>
@@ -84,6 +91,7 @@
           <div id="coverage-chart" class="chart-large"></div>
       </section>
 
+      <!-- Explore: axis selects + Vega-Lite chart (stacked bar or line) -->
       <section class="explore-panel lazy-section" data-chart="sample">
         <header class="explore-header">
           <div class="explore-kicker">
@@ -97,6 +105,7 @@
 
         <div class="explore-content">
           <div class="explore-chart-area">
+            <!-- Plot type, X axis, Segment By (Y) – wired in app.js -->
             <div class="axis-selects">
               <label class="field-select">
                 <span class="label">Plot type</span>
@@ -117,6 +126,7 @@
             <div id="sample-chart" class="sample-chart"></div>
           </div>
 
+          <!-- CTA buttons: portal explorer and interactive dashboard -->
           <div class="explore-actions">
             <button type="button" class="explore-cta" onclick="window.location.href='https://portal-ui.imicroseq-dataportal.ca/explorer/environmental'">View the data on the iMicroSeq Data Portal</button>
             <button type="button" class="primary-cta" onclick="window.location.href='./dashboard.html'">Visualize the data on the Interactive Dashboard</button>
@@ -125,6 +135,7 @@
       </section>
     </main>
 
+    <!-- Dashboard logic: fetch /api/dashboard, summary animation, lazy charts -->
     <script src="app.js"></script>
   </body>
 </html>
