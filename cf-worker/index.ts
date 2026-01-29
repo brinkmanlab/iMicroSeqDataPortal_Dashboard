@@ -6,8 +6,35 @@ export interface Env {
   ASSETS: Fetcher;
 }
 
-// Cache dashboard data in memory for the lifetime of the isolate (reduces GitHub fetches)
+// Cache dashboard data in memory for the lifetime of the isolate (reduces fetches)
 let cachedData: Awaited<ReturnType<typeof loadDashboardData>> | null = null;
+
+/** Decompress gzip stream and parse JSON (built-in DecompressionStream) */
+async function decompressJsonFromGz(
+  body: ReadableStream<Uint8Array>
+): Promise<Awaited<ReturnType<typeof loadDashboardData>>> {
+  const decompressed = new Response(
+    body.pipeThrough(new DecompressionStream("gzip"))
+  );
+  const text = await decompressed.text();
+  return JSON.parse(text) as Awaited<ReturnType<typeof loadDashboardData>>;
+}
+
+/** Prefer static data/data.json.gz from assets (built by scripts/build_dashboard_data.py) */
+async function getDashboardData(
+  request: Request,
+  env: Env
+): Promise<Awaited<ReturnType<typeof loadDashboardData>>> {
+  const dataUrl = new URL("/data/data.json.gz", request.url);
+  const staticRes = await env.ASSETS.fetch(dataUrl);
+  if (staticRes.ok && staticRes.body) {
+    return decompressJsonFromGz(staticRes.body as ReadableStream<Uint8Array>);
+  }
+  if (!cachedData) {
+    cachedData = await loadDashboardData();
+  }
+  return cachedData;
+}
 
 export default {
   /** Handle incoming requests: /api/dashboard returns JSON; all other paths go to static assets */
@@ -18,13 +45,11 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
 
-    // API route: return aggregated dashboard data (TSV/CSV from GitHub)
+    // API route: return aggregated dashboard data (static data.json.gz or live from GitHub)
     if (url.pathname === "/api/dashboard") {
       try {
-        if (!cachedData) {
-          cachedData = await loadDashboardData();
-        }
-        return Response.json(cachedData, {
+        const data = await getDashboardData(request, env);
+        return Response.json(data, {
           headers: {
             "Cache-Control": "public, max-age=300", // 5 min cache
           },
