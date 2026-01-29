@@ -501,12 +501,21 @@ function initSampleChart(data) {
   return updateSampleChart();
 }
 
+function hideLoadingOverlay() {
+  const overlay = document.getElementById('loading-overlay');
+  if (!overlay) return;
+  overlay.classList.add('hidden');
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.setAttribute('aria-busy', 'false');
+}
+
 // Entry: fetch data, populate summary, lazy-load charts when sections scroll into view
 async function initDashboard() {
   try {
     const data = await fetchDashboardData();
 
     populateSummary(data.summary);
+    hideLoadingOverlay();
 
     const loadedCharts = new Set();
 
@@ -544,6 +553,7 @@ async function initDashboard() {
       observer.observe(section);
     });
   } catch (err) {
+    hideLoadingOverlay();
     // eslint-disable-next-line no-console
     console.error(err);
   }
