@@ -2,7 +2,7 @@
 
 POPULATE WITH TEXT :)
 
-### Deploying to Cloudflare Workers
+### Testing and Deploying to Cloudflare Workers
 
 The app can run as a Cloudflare Worker with static assets:
 
@@ -10,7 +10,7 @@ The app can run as a Cloudflare Worker with static assets:
 
 2. **Local dev**: `npm run cf:dev` (TEST first locally before deploying).
 
-3. **Deploy**: `npm run cf:deploy` (or `npx wrangler deploy`). 
+3. **Deploy**: `npm run cf:deploy` (DEPLOY to cloudflare's edge network. The site will be live at imicroseq-dashboard.bfjia.net). 
 
 
 # HOW CLOUDFLARE WORKER WORKS WITH THIS APP:
@@ -20,7 +20,7 @@ The app can run as a Cloudflare Worker with static assets:
 When you run `wrangler deploy` (or `npm run cf:deploy`):
 
 - **Worker script**  
-  Your `cf-worker/index.ts` (and bundled `dashboard-data.ts`) is compiled and deployed as the d that runs on every matching request.
+  Your `cf-worker/index.ts` (and bundled `dashboard-data.ts`) is compiled and deployed as the daemon that runs on every matching request.
 
 - **Static assets**  
   Everything under `public/` (HTML, CSS, JS, images) is uploaded and attached to the Worker via the **ASSETS** binding (`[assets]` in `wrangler.toml`). Those files are stored on Cloudflare’s edge; they are **not** served by your own server.

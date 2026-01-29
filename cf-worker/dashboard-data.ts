@@ -1,4 +1,6 @@
 // Inline TSV/CSV parsers (no eval/new Function) — Workers disallow code generation
+
+/** Parse tab-separated text into an array of row objects keyed by first-line headers */
 function parseTSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
   if (lines.length < 2) return [];
@@ -15,6 +17,7 @@ function parseTSV(text: string): Record<string, string>[] {
   return rows;
 }
 
+/** Parse comma-separated text (handles quoted fields) into row objects keyed by first-line headers */
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
   if (lines.length < 2) return [];
@@ -31,11 +34,13 @@ function parseCSV(text: string): Record<string, string>[] {
   return rows;
 }
 
+/** Split a single CSV line into fields, respecting double-quoted values (no commas inside quotes) */
 function parseCSVRow(line: string): string[] {
   const out: string[] = [];
   let i = 0;
   while (i < line.length) {
     if (line[i] === '"') {
+      // Quoted field: consume until closing quote
       let field = "";
       i++;
       while (i < line.length && line[i] !== '"') {
@@ -45,6 +50,7 @@ function parseCSVRow(line: string): string[] {
       if (line[i] === '"') i++;
       out.push(field);
     } else {
+      // Unquoted: take from current position to next comma or end
       const comma = line.indexOf(",", i);
       if (comma === -1) {
         out.push(line.slice(i));
@@ -57,6 +63,7 @@ function parseCSVRow(line: string): string[] {
   return out;
 }
 
+// URLs for main TSV data and province capital coordinates (fallback when record has no lat/lon)
 const DATA_URL =
   "https://raw.githubusercontent.com/bfjia/iMicroSeq_Dashboard/refs/heads/main/data/imicroseq.tsv";
 const PROVINCE_COORDS_URL =
@@ -67,6 +74,7 @@ const GITHUB_FETCH_OPTIONS: RequestInit = {
   headers: { "User-Agent": "iMicroSeq-Dashboard/1.0 (Cloudflare Worker)" },
 };
 
+/** Parse latitude or longitude from string (handles "N/S/E/W" suffix and "not provided" / "--") */
 function parseLatLon(
   raw: string | number | undefined | null,
   kind: "lat" | "lon"
@@ -92,6 +100,7 @@ function parseLatLon(
   return value;
 }
 
+/** Shape of the dashboard API response consumed by the frontend */
 export interface DashboardData {
   summary: {
     records: number;
@@ -108,6 +117,7 @@ export interface DashboardData {
   axisOptions: Array<{ value: string; label: string }>;
 }
 
+/** Fetch TSV/CSV from GitHub, parse, aggregate, and return dashboard payload */
 export async function loadDashboardData(): Promise<DashboardData> {
   const [tsvRes, csvRes] = await Promise.all([
     fetch(DATA_URL, GITHUB_FETCH_OPTIONS),
@@ -118,6 +128,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
   const raw = await tsvRes.text();
   const rows = parseTSV(raw);
 
+  // Province capital coordinates: used as fallback when record has no lat/lon
   const provinceCoords = new Map<string, { lat: number; lon: number }>();
   try {
     if (!csvRes.ok)
@@ -133,7 +144,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
       }
     });
   } catch {
-    // Province fallback disabled
+    // Province coords optional; continue without fallback
   }
 
   const totalRecords = rows.length;
@@ -145,6 +156,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
   let maxYear = -Infinity;
   const growthByYear = new Map<number, number>();
 
+  // Single pass: sites, organisms, orgs, lat/lon (with province fallback), year growth
   for (const row of rows) {
     const site = row["geo loc name (site)"];
     if (site?.trim()) siteSet.add(site.trim());
@@ -155,6 +167,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
 
     let lat = parseLatLon(row["geo loc latitude"], "lat");
     let lon = parseLatLon(row["geo loc longitude"], "lon");
+    // Fallback to province capital if record has no coordinates
     if (lat == null || lon == null) {
       const stateProvince = (
         row["geo loc name (state/province/territory)"] || ""
@@ -186,6 +199,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     }
   }
 
+  // Build cumulative growth series (year -> total samples so far)
   const growth: Array<{ year: number; records: number }> = [];
   let cumulative = 0;
   for (let y = minYear; y <= maxYear; y++) {
@@ -194,6 +208,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     growth.push({ year: y, records: cumulative });
   }
 
+  // Breakdown by assay type: top 6 categories, rest as "Other"
   const orgCounts: Record<string, number> = {};
   for (const row of rows) {
     const org = row["assay type"] || "Unknown";
@@ -214,6 +229,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     value,
   }));
 
+  // Map points: lat,lon -> count, sorted by count descending
   const coveragePoints = Array.from(coordCounts.entries())
     .map(([key, count]) => {
       const [latStr, lonStr] = key.split(",");
@@ -225,6 +241,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     })
     .sort((a, b) => b.count - a.count);
 
+  // Normalized rows for Explore chart: selected fields + parsed Year / Year-Month
   const sampleFieldSpecRows = rows.map((row) => {
     const dateStr = row["sample collection start date"];
     let year: number | null = null;
@@ -249,6 +266,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     };
   });
 
+  // Return full dashboard payload for /api/dashboard
   return {
     summary: {
       records: totalRecords,

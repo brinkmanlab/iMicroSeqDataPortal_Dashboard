@@ -1,5 +1,7 @@
+// Cloudflare Worker entry: serves /api/dashboard and static assets
 import { loadDashboardData } from "./dashboard-data";
 
+/** Worker bindings: ASSETS is the static asset fetcher (public folder) */
 export interface Env {
   ASSETS: Fetcher;
 }
@@ -8,6 +10,7 @@ export interface Env {
 let cachedData: Awaited<ReturnType<typeof loadDashboardData>> | null = null;
 
 export default {
+  /** Handle incoming requests: /api/dashboard returns JSON; all other paths go to static assets */
   async fetch(
     request: Request,
     env: Env,
@@ -15,6 +18,7 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
 
+    // API route: return aggregated dashboard data (TSV/CSV from GitHub)
     if (url.pathname === "/api/dashboard") {
       try {
         if (!cachedData) {
@@ -34,6 +38,7 @@ export default {
       }
     }
 
+    // All other paths: serve static files from ASSETS (public/)
     return env.ASSETS.fetch(request);
   },
 };

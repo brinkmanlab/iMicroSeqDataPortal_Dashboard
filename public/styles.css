@@ -1,3 +1,4 @@
+/* Reset: consistent box model */
 *,
 *::before,
 *::after {
@@ -13,7 +14,7 @@ body {
   text-align: center;
 }
 
-/* Site header: dark blue with logo area (microbial bg + angled panel) and nav */
+/* --- Site header: dark blue with logo area (angled panel) and nav --- */
 .site-header {
   display: flex;
   align-items: stretch;
@@ -24,6 +25,7 @@ body {
   text-align: left;
 }
 
+/* Logo area: dark blue with radial gradients; contains clipped white panel */
 .header-logo-area {
   position: relative;
   flex: 0 0 28%;
@@ -36,6 +38,7 @@ body {
     radial-gradient(circle at 25% 80%, rgba(90, 170, 245, 0.18) 0%, transparent 38%);
 }
 
+/* White angled panel (clip-path) holding the logo image */
 .header-logo-panel {
   position: absolute;
   top: 0;
@@ -52,6 +55,7 @@ body {
 }
 
 .header-logo-img {
+  /* Logo image: constrained height, contain fit */
   height: 44px;
   width: auto;
   max-width: 100%;
@@ -59,6 +63,7 @@ body {
   display: block;
 }
 
+/* Nav bar: fills remaining header, links on left */
 .header-nav {
   flex: 1;
   display: flex;
@@ -70,6 +75,7 @@ body {
 }
 
 .header-link {
+  /* Nav link style */
   color: #ffffff;
   font-weight: 700;
   font-size: 0.95rem;
@@ -89,12 +95,14 @@ body {
   opacity: 0.9;
 }
 
+/* --- Main content area --- */
 .page {
   max-width: 1120px;
   margin: 1.75rem auto 3rem;
   padding: 0 1.5rem 3rem;
 }
 
+/* Page title row: icon + "At a Glance" + "The Canadian iMicroSeq Data Portal" */
 .page-title {
   display: flex;
   align-items: center;
@@ -126,7 +134,7 @@ body {
   line-height: 1.2;
 }
 
-/* Lazy-loaded sections: hidden until in view, then animate in */
+/* Lazy-loaded sections: initially hidden, fade/slide in when in viewport (app.js IntersectionObserver) */
 .lazy-section {
   opacity: 0;
   transform: translateY(24px);
@@ -138,6 +146,7 @@ body {
   transform: translateY(0);
 }
 
+/* --- Hero summary cards (4-column grid) --- */
 .hero-cards {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -146,6 +155,7 @@ body {
 }
 
 .hero-card {
+  /* Single summary card: label, value (animated in app.js), subtext */
   background: #ffffff;
   border-radius: 12px;
   padding: 1.25rem 1.5rem;
@@ -174,6 +184,7 @@ body {
   color: #9ca3af;
 }
 
+/* --- Chart panels (growth, breakdown, coverage) --- */
 .panel {
   background: #ffffff;
   border-radius: 14px;
@@ -183,6 +194,7 @@ body {
 }
 
 .panel-wide {
+  /* Full-width panel for coverage map */
   margin-bottom: 1.75rem;
 }
 
@@ -196,6 +208,7 @@ body {
 }
 
 .panel-header h2 {
+  /* Panel title */
   font-size: 1rem;
   margin: 0;
   font-weight: 600;
@@ -206,6 +219,7 @@ body {
   color: #9ca3af;
 }
 
+/* Coverage map container (Leaflet fills this) */
 .chart-large {
   width: 100%;
   height: 420px;
@@ -213,6 +227,7 @@ body {
   position: relative;
 }
 
+/* Leaflet marker tooltip styling */
 .coverage-tooltip {
   font-size: 0.8rem;
   padding: 0.35rem 0.5rem;
@@ -224,9 +239,10 @@ body {
 
 .chart-medium {
   height: 220px;
-  width: 100%
+  width: 100%;
 }
 
+/* Two-column grid for growth + breakdown panels */
 .panel-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -234,6 +250,7 @@ body {
   margin-bottom: 2rem;
 }
 
+/* --- Explore section: kicker, subtitle, axis selects, chart, CTAs --- */
 .explore-header {
   display: flex;
   flex-direction: column;
@@ -246,6 +263,7 @@ body {
 }
 
 .explore-kicker {
+  /* "Explore" badge + "Inside the iMicroSeq Data Portal" */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -268,6 +286,7 @@ body {
 }
 
 .explore-kicker-text {
+  /* Main explore heading text */
   font-size: 1.25rem;
   font-weight: 700;
   color: #111827;
@@ -298,6 +317,7 @@ body {
 }
 
 .explore-content {
+  /* Wrapper for chart area + action buttons */
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -311,6 +331,7 @@ body {
   width: 100%;
 }
 
+/* Row of dropdowns: Plot type, X axis, Segment By */
 .axis-selects {
   display: flex;
   flex-wrap: wrap;
@@ -322,6 +343,7 @@ body {
   display: none;
 }
 
+/* Single dropdown label + select (custom arrow via background) */
 .field-select {
   display: flex;
   flex-direction: column;
@@ -351,6 +373,7 @@ body {
   outline-offset: 1px;
 }
 
+/* Explore Vega chart container */
 .sample-chart {
   width: 100%;
   min-width: 280px;
@@ -390,6 +413,7 @@ body {
   transform: translateY(-1px);
 }
 
+/* Primary CTA: filled blue (interactive dashboard) */
 .primary-cta {
   padding: 0.85rem 2.2rem;
   font-size: 0.95rem;
@@ -416,6 +440,7 @@ body {
   box-shadow: 0 8px 18px rgba(74, 99, 231, 0.35);
 }
 
+/* --- Responsive: fewer columns on small screens --- */
 @media (max-width: 960px) {
   .hero-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -431,6 +456,7 @@ body {
 }
 
 @media (max-width: 640px) {
+  /* Single-column hero cards; reduced page padding */
   .top-bar {
     padding: 0.85rem 1.25rem;
   }
