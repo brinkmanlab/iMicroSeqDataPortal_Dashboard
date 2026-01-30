@@ -177,22 +177,28 @@ function initLeafletMap(container, points) {
   // Add circle markers scaled by sample count; tooltip shows count and lat/lon
   function addPoints() {
     if (!points || points.length === 0) return;
+    console.log(points);
+
     const maxCount = Math.max(...points.map((d) => d.count), 1);
     points.forEach((d) => {
-      const radius = Math.max(4, Math.min(20, 4 + (d.count / maxCount) * 10));
-      const fillOpacity = 0.1 + (d.count / maxCount) * 0.7;
+      const radius = Math.max(6, Math.min(30, 4 + (d.count / maxCount) * 10));
+      const fillOpacity = Math.min(0.8, 0.1 + (d.count / 10000));
       const marker = L.circleMarker([d.latitude, d.longitude], {
         radius,
-        fillColor: '#4A63E7',
+        fillColor: '#000080',
         color: '#fff',
         weight: 1,
         opacity: 1,
         fillOpacity
       }).addTo(map);
       marker.bindTooltip(
-        `<strong>Samples</strong>: ${d.count}<br>Lat: ${d.latitude.toFixed(4)}<br>Lon: ${d.longitude.toFixed(4)}`,
+        `<strong># of Samples</strong>: ${d.count}`,
         { permanent: false, direction: 'top', className: 'coverage-tooltip' }
       );
+      /*marker.bindTooltip(
+        `<strong>Samples</strong>: ${d.count}<br>Lat: ${d.latitude.toFixed(4)}<br>Lon: ${d.longitude.toFixed(4)}`,
+        { permanent: false, direction: 'top', className: 'coverage-tooltip' }
+      );*/
     });
   }
 
