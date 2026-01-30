@@ -148,19 +148,26 @@ def main() -> None:
         cumulative += count
         growth.append({"year": y, "records": cumulative})
 
-    assay_counts: dict[str, int] = {}
+    site_counts: dict[str, int] = {}
     for row in rows:
-        assay = (row.get("assay type") or "Unknown").strip()
-        assay_counts[assay] = assay_counts.get(assay, 0) + 1
-    top_assays = [
-        name for name, _ in sorted(assay_counts.items(), key=lambda x: -x[1])[:6]
+        site = (row.get("environmental site") or "Unknown").strip()
+        site_counts[site] = site_counts.get(site, 0) + 1
+    top_sites = [
+        name for name, _ in sorted(site_counts.items(), key=lambda x: -x[1])[:8]
     ]
     category_counts: dict[str, int] = {}
     for row in rows:
-        assay = (row.get("assay type") or "Unknown").strip()
-        cat = assay if assay in top_assays else "Other"
+        site = (row.get("environmental site") or "Unknown").strip()
+        cat = site if site in top_sites else "Other"
         category_counts[cat] = category_counts.get(cat, 0) + 1
-    breakdown = [{"category": k, "value": v} for k, v in category_counts.items()]
+    # Descending by value, "Other" last
+    breakdown = [
+        {"category": k, "value": v}
+        for k, v in sorted(
+            category_counts.items(),
+            key=lambda x: (x[0].lower() == "other", -x[1]),
+        )
+    ]
 
     coverage_points = []
     for key, count in coord_counts.items():

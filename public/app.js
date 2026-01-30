@@ -50,6 +50,12 @@ function populateSummary(summary) {
   animateCount(document.getElementById('data-sources'), summary.dataSources);
 }
 
+// Colorblind-friendly qualitative palette – banner blue first, then lighter blue/purple/red, rest
+const CATEGORY_PALETTE = [
+  '#4A63E7', '#88CCEE', '#CC99BB', '#EE8877', '#6699CC', '#AA4499',
+  '#CC6677', '#332288', '#117733', '#44AA99', '#DDCC77', '#999933'
+];
+
 // Vega-Lite spec: cumulative growth area chart (year vs samples)
 function createGrowthSpec(data) {
   return {
@@ -119,9 +125,7 @@ function createBreakdownBarSpec(data) {
       color: {
         field: 'category',
         type: 'nominal',
-        scale: {
-          range: ['#4A63E7', '#8B9BFF', '#A3B5FF', '#D3DCF8']
-        },
+        scale: { range: CATEGORY_PALETTE },
         legend: null,//{
         //  "orient" : "top",   
           //"labelExpr": "length(datum.label) > 12 ? slice(datum.label, 0, 12) + '\\n' + slice(datum.label, 12) : datum.label",
@@ -137,24 +141,31 @@ function createBreakdownBarSpec(data) {
   };
 }
 
-// Vega-Lite spec: category breakdown pie chart
+// Vega-Lite spec: category breakdown pie chart (slices descending, Other last)
 function createBreakdownPieSpec(data) {
+  const sorted = [...(data || [])].sort((a, b) => {
+    if (String(a.category).toLowerCase() === 'other') return 1;
+    if (String(b.category).toLowerCase() === 'other') return -1;
+    return (b.value ?? 0) - (a.value ?? 0);
+  });
+  // Add order index so Vega-Lite uses our slice order (not alphabetical)
+  const valuesWithOrder = sorted.map((d, i) => ({ ...d, _order: i }));
   return {
     $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
     description: 'Category breakdown pie chart',
     width: 'container',
     autosize: {type: 'fit', contains: 'padding'},
-    data: { values: data },
+    data: { values: valuesWithOrder },
     mark: { type: 'arc', tooltip: true },
     encoding: {
       theta: { field: 'value', type: 'quantitative' }, // Pie slice size
-      color: { 
-        field: 'category', 
+      order: { field: '_order', type: 'quantitative' }, // Slice order: descending value, Other last
+      color: {
+        field: 'category',
         type: 'nominal',
-        scale: {
-          range: ['#4A63E7', '#8B9BFF', '#A3B5FF', '#D3DCF8']
-        },
-        legend: null,
+        sort: null, // Don't sort categories alphabetically
+        scale: { range: CATEGORY_PALETTE },
+        legend: { orient: 'right' },
       },
       tooltip: [
         { field: 'category', type: 'nominal' },
@@ -410,12 +421,7 @@ function createSampleFieldSpec(aggregated, xField, yField) {
       color: {
         field: 'yCategory',
         type: 'nominal',
-        scale: {
-          range: [
-            '#4A63E7', '#8B9BFF', '#A3B5FF', '#D3DCF8', '#6B7FD7', '#9CA9FF',
-            '#7B8FEB', '#5A72E0', '#B8C4F0', '#3D55C4', '#8A9EE8', '#2E45A8'
-          ]
-        },
+        scale: { range: CATEGORY_PALETTE },
         legend: { title: yField === 'Year' ? 'Year' : yField }
       },
       tooltip: [
