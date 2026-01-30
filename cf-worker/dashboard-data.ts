@@ -207,26 +207,29 @@ export async function loadDashboardData(): Promise<DashboardData> {
     growth.push({ year: y, records: cumulative });
   }
 
-  // Breakdown by assay type: top 6 categories, rest as "Other"
-  const orgCounts: Record<string, number> = {};
+  // Breakdown by environmental site: top 8 categories, rest as "Other"
+  const siteCounts: Record<string, number> = {};
   for (const row of rows) {
-    const org = row["assay type"] || "Unknown";
-    orgCounts[org] = (orgCounts[org] || 0) + 1;
+    const site = row["environmental site"] || "Unknown";
+    siteCounts[site] = (siteCounts[site] || 0) + 1;
   }
-  const topOrgs = Object.entries(orgCounts)
+  const topSites = Object.entries(siteCounts)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
+    .slice(0, 8)
     .map(([name]) => name);
   const categoryCounts: Record<string, number> = {};
   for (const row of rows) {
-    const org = row["assay type"] || "Unknown";
-    const category = topOrgs.includes(org) ? org : "Other";
+    const site = row["environmental site"] || "Unknown";
+    const category = topSites.includes(site) ? site : "Other";
     categoryCounts[category] = (categoryCounts[category] || 0) + 1;
   }
-  const breakdown = Object.entries(categoryCounts).map(([category, value]) => ({
-    category,
-    value,
-  }));
+  const breakdown = Object.entries(categoryCounts)
+    .map(([category, value]) => ({ category, value }))
+    .sort((a, b) => {
+      if (a.category.toLowerCase() === "other") return 1;
+      if (b.category.toLowerCase() === "other") return -1;
+      return b.value - a.value;
+    });
 
   // Map points: lat,lon -> count, sorted by count descending
   const coveragePoints = Array.from(coordCounts.entries())
