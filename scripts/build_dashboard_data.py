@@ -35,6 +35,16 @@ OUTPUT_TSV = DATA_DIR / "data.tsv"
 OUTPUT_JSON_GZ_PUBLIC = PUBLIC_DATA_DIR / "data.json.gz"
 
 
+def trim_brackets(s: str | None) -> str:
+    """Remove everything in [], including the brackets, from the value."""
+    if s is None:
+        return ""
+    out = (s or "").strip()
+    while "[" in out:
+        out = re.sub(r"\[[^\]]*\]", "", out)
+    return out.strip()
+
+
 def parse_lat_lon(raw: str | None, kind: str) -> float | None:
     if raw is None:
         return None
@@ -150,14 +160,14 @@ def main() -> None:
 
     site_counts: dict[str, int] = {}
     for row in rows:
-        site = (row.get("environmental site") or "Unknown").strip()
+        site = trim_brackets(row.get("environmental site")) or "Unknown"
         site_counts[site] = site_counts.get(site, 0) + 1
     top_sites = [
         name for name, _ in sorted(site_counts.items(), key=lambda x: -x[1])[:8]
     ]
     category_counts: dict[str, int] = {}
     for row in rows:
-        site = (row.get("environmental site") or "Unknown").strip()
+        site = trim_brackets(row.get("environmental site")) or "Unknown"
         cat = site if site in top_sites else "Other"
         category_counts[cat] = category_counts.get(cat, 0) + 1
     # Descending by value, "Other" last
@@ -194,14 +204,14 @@ def main() -> None:
                 year_month = f"{ymm.group(1)}-{ymm.group(2)}"
         sample_field_spec_rows.append(
             {
-                "organism": row.get("organism", ""),
-                "purpose of sampling": row.get("purpose of sampling", ""),
-                "geo loc name (state/province/territory)": row.get(
-                    "geo loc name (state/province/territory)", ""
+                "organism": trim_brackets(row.get("organism", "")),
+                "purpose of sampling": trim_brackets(row.get("purpose of sampling", "")),
+                "geo loc name (state/province/territory)": trim_brackets(
+                    row.get("geo loc name (state/province/territory)", "")
                 ),
-                "environmental site": row.get("environmental site", ""),
-                "collection device": row.get("collection device", ""),
-                "assay type": row.get("assay type", ""),
+                "environmental site": trim_brackets(row.get("environmental site", "")),
+                "collection device": trim_brackets(row.get("collection device", "")),
+                "assay type": trim_brackets(row.get("assay type", "")),
                 "Year": year,
                 "Year-Month": year_month,
             }
