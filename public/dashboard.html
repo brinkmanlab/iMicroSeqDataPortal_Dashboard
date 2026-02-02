@@ -40,17 +40,18 @@
           </svg>
         </span>
         <h1 class="page-title-text">The Canadian iMicroSeq Data Portal</h1>
+        <p class="page-title-subtext">Best viewed in landscape mode.</p>
       </header>
 
       <!-- Explore / SampleFieldSpec chart (same as index page) -->
       <section class="explore-panel lazy-section" data-chart="sample">
         <header class="explore-header">
           <div class="explore-kicker">
-            <span class="explore-badge">Explore</span>
-            <span class="explore-kicker-text">Sample field breakdown</span>
+            <span class="explore-badge">Portal Data</span>
+            <span class="explore-kicker-text">Sample breakdown</span>
           </div>
           <p class="explore-subtitle">
-            Interactive data visualizer. Choose plot type, X axis, and segment by field.
+            Explore the data types on the iMicroSeq Data Portal.
           </p>
         </header>
 
@@ -61,7 +62,7 @@
                 <span class="label">Plot type</span>
                 <select id="sample-chart-plot-type">
                   <option value="stacked-bar">Stacked bar</option>
-                  <option value="line">Line</option>
+                  <!-- <option value="line">Line</option> -->
                 </select>
               </label>
               <label class="field-select">
@@ -78,15 +79,17 @@
         </div>
       </section>
 
+      <hr class="section-divider" aria-hidden="true" />
+
       <!-- Viral Loads: full-width like sample field breakdown -->
       <section class="viral-load-panel lazy-section" data-chart="viral-load">
         <header class="explore-header">
           <div class="explore-kicker">
             <span class="explore-badge">Viral Loads</span>
-            <span class="explore-kicker-text">Average measurement value over time</span>
+            <span class="explore-kicker-text">Trends over time</span>
           </div>
           <p class="explore-subtitle">
-            Filter by location and assay. Choose measurement unit for the Y-axis.
+            See how the portal captures viral load data over time.
           </p>
         </header>
         <div class="viral-load-content">
@@ -115,7 +118,7 @@
                 <select id="viral-organism"></select>
               </label>
               <label class="field-select viral-field-select">
-                <span class="label">Gene Symbol</span>
+                <span class="label">Gene Target</span>
                 <select id="viral-gene"></select>
               </label>
               <label class="field-select viral-field-select">

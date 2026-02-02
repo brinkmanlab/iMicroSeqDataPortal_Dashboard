@@ -182,6 +182,21 @@ body {
   line-height: 1.2;
 }
 
+.page-title-subtext {
+  flex-basis: 100%;
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+.section-divider {
+  border: 0;
+  height: 0;
+  border-top: 1px solid #d7deef;
+  margin: 2.5rem 0;
+}
+
 /* Lazy-loaded sections: initially hidden, fade/slide in when in viewport (app.js IntersectionObserver) */
 .lazy-section {
   opacity: 0;
