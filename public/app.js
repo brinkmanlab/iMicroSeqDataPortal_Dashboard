@@ -515,6 +515,7 @@ function initSampleChart(data) {
 
 // ——— Viral Loads: quant.json.gz (8-level nested, leaf = date -> [values]) ———
 const QUANT_DATA_URL = 'data/quant.json.gz';
+const TREND_LEGEND_LABEL = 'Trend';
 
 async function fetchQuantData() {
   const res = await fetch(QUANT_DATA_URL);
@@ -637,9 +638,49 @@ function collectViralLoadSeries(nested, selections) {
   return result;
 }
 
-// Centered 1-month moving average per measurementUnit series for trend line
-const TREND_WINDOW_MS = 60 * 24 * 60 * 30 * 1000; // 60 days (2 months) in ms
-const TREND_LEGEND_LABEL = 'Trend (1-mo avg)';
+// Local quadratic fit with span 0.2 (20% of points per window) per measurementUnit series
+const TREND_SPAN = 0.2;
+
+function quadraticFitAt(xVals, yVals, xQuery) {
+  const n = xVals.length;
+  if (n < 3) return n === 1 ? yVals[0] : n === 2 ? (yVals[0] + yVals[1]) / 2 : 0;
+  let sx = 0, sx2 = 0, sx3 = 0, sx4 = 0, sy = 0, sxy = 0, sx2y = 0;
+  for (let j = 0; j < n; j++) {
+    const x = xVals[j];
+    const y = yVals[j];
+    const x2 = x * x;
+    sx += x;
+    sx2 += x2;
+    sx3 += x2 * x;
+    sx4 += x2 * x2;
+    sy += y;
+    sxy += x * y;
+    sx2y += x2 * y;
+  }
+  const M = [
+    [sx4, sx3, sx2],
+    [sx3, sx2, sx],
+    [sx2, sx, n]
+  ];
+  const v = [sx2y, sxy, sy];
+  const c = solve3(M, v);
+  if (c == null) return yVals[Math.floor(n / 2)];
+  return c[0] * xQuery * xQuery + c[1] * xQuery + c[2];
+}
+
+function solve3(M, v) {
+  const a = M[0][0], b = M[0][1], c = M[0][2];
+  const d = M[1][0], e = M[1][1], f = M[1][2];
+  const g = M[2][0], h = M[2][1], i = M[2][2];
+  const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (Math.abs(det) < 1e-12) return null;
+  const v0 = v[0], v1 = v[1], v2 = v[2];
+  return [
+    (v0 * (e * i - f * h) - b * (v1 * i - v2 * f) + c * (v1 * h - v2 * e)) / det,
+    (a * (v1 * i - v2 * f) - v0 * (d * i - f * g) + c * (v2 * d - v1 * g)) / det,
+    (a * (e * v2 - v1 * h) - b * (d * v2 - v1 * g) + v0 * (d * h - e * g)) / det
+  ];
+}
 
 function addSmoothingTrend(data) {
   if (!data || data.length === 0) return data;
@@ -652,22 +693,21 @@ function addSmoothingTrend(data) {
   const out = [];
   for (const unit of Object.keys(byUnit)) {
     const arr = byUnit[unit].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    for (let i = 0; i < arr.length; i++) {
-      const t = new Date(String(arr[i].date)).getTime();
-      if (Number.isNaN(t)) {
-        out.push({ ...arr[i], valueSmooth: arr[i].value, lineType: TREND_LEGEND_LABEL });
-        continue;
+    const n = arr.length;
+    const k = Math.max(3, Math.min(n, Math.round(n * TREND_SPAN)));
+    const half = Math.floor((k - 1) / 2);
+    for (let i = 0; i < n; i++) {
+      const start = Math.max(0, i - half);
+      const end = Math.min(n, start + k);
+      const xVals = [];
+      const yVals = [];
+      for (let j = start; j < end; j++) {
+        xVals.push(j - start);
+        yVals.push(arr[j].value);
       }
-      const tLo = t - TREND_WINDOW_MS / 2;
-      const tHi = t + TREND_WINDOW_MS / 2;
-      const inWindow = arr.filter((r) => {
-        const rt = new Date(String(r.date)).getTime();
-        return !Number.isNaN(rt) && rt >= tLo && rt <= tHi;
-      });
-      const valueSmooth = inWindow.length
-        ? inWindow.reduce((s, r) => s + r.value, 0) / inWindow.length
-        : arr[i].value;
-      out.push({ ...arr[i], valueSmooth, lineType: TREND_LEGEND_LABEL });
+      const xQuery = i - start;
+      const valueSmooth = quadraticFitAt(xVals, yVals, xQuery);
+      out.push({ ...arr[i], valueSmooth: Number.isFinite(valueSmooth) ? valueSmooth : arr[i].value, lineType: TREND_LEGEND_LABEL });
     }
   }
   return out;
@@ -921,7 +961,16 @@ function initViralLoadChart() {
     })
     .catch((err) => {
       console.error('Viral load data:', err);
-      document.getElementById('viral-load-chart').innerHTML = '<p class="explore-subtitle">Failed to load viral load data. Ensure <code>data/quant.json.gz</code> is available at <code>public/data/quant.json.gz</code>.</p>';
+      const chartEl = document.getElementById('viral-load-chart');
+      const msg = err && err.message ? err.message : String(err);
+      chartEl.innerHTML = '<p class="explore-subtitle">Failed to load viral load data. ' +
+        'Ensure <code>public/data/quant.json.gz</code> exists and the app is served over HTTP (e.g. <code>npx serve public</code> or <code>python -m http.server --directory public</code>). ' +
+        'Opening the HTML file directly (file://) will not load data.</p>' +
+        (msg ? '<p class="explore-subtitle viral-load-err-detail"></p>' : '');
+      if (msg) {
+        const detail = chartEl.querySelector('.viral-load-err-detail');
+        if (detail) detail.textContent = 'Error: ' + msg;
+      }
     });
 }
 

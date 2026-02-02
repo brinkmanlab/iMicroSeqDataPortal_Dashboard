@@ -10,7 +10,9 @@ The app can run as a Cloudflare Worker with static assets:
 
 2. **Local dev**: `npm run cf:dev` (TEST first locally before deploying).
 
-3. **Deploy**: `npm run cf:deploy` (DEPLOY to cloudflare's edge network. The site will be live at imicroseq-dashboard.bfjia.net). 
+3. **Deploy**: `npm run cf:deploy` (DEPLOY to cloudflare's edge network. The site will be live at imicroseq-dashboard.bfjia.net).
+
+**Viral Loads data:** The dashboard’s Viral Loads section loads `public/data/quant.json.gz`. Generate it with `python scripts/build_quant_tsv.py` (reads `data/imicroseq.csv.xz`, writes `data/quant.json.gz` and copies to `public/data/quant.json.gz`). For local testing, serve over HTTP (e.g. `npx serve public` or `python -m http.server --directory public`); opening the HTML file directly (file://) will not load data.
 
 
 # HOW CLOUDFLARE WORKER WORKS WITH THIS APP:

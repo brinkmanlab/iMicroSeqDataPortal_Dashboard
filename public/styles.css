@@ -475,6 +475,12 @@ body {
   font-size: 0.8rem;
 }
 
+.viral-load-err-detail {
+  margin-top: 0.5em;
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+
 .viral-load-chart {
   width: 100%;
   min-width: 280px;
