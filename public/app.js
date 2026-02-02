@@ -214,7 +214,7 @@ function initLeafletMap(container, points) {
   }
 
   // Canada GeoJSON overlay (simplified shape); then add sample points
-  fetch('https://raw.githubusercontent.com/bfjia/iMicroSeq_Dashboard/refs/heads/main/data/CAN.geo.json')
+  fetch('data/CAN.geo.json')
     .then((r) => r.json())
     .then((geojson) => {
       L.geoJSON(geojson, {
