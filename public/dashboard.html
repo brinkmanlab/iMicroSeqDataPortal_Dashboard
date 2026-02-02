@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interactive Dashboard – iMicroSeq</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- Vega/Vega-Lite for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/vega@6.2.0/build/vega.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@6.4.2/build/vega-lite.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@7.1.0/build/vega-embed.min.js"></script>
+  </head>
+  <body>
+    <!-- Sticky header: logo (links to iMicroSeq portal) + nav -->
+    <header class="site-header">
+      <div class="header-logo-area">
+        <div class="header-logo-panel">
+          <a href="https://imicroseq-dataportal.ca/"><img src="./img/imicroseq-logo.png" alt="iMicroSeq" class="header-logo-img" /></a>
+        </div>
+      </div>
+      <nav class="header-nav">
+        <a href="./index.html" class="header-link">Home<span class="header-chevron" aria-hidden="true">▼</span></a>
+      </nav>
+    </header>
+
+    <div id="loading-overlay" class="loading-overlay" aria-hidden="false" aria-busy="true" aria-live="polite">
+      <div class="loading-content">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <p class="loading-text">Loading dashboard…</p>
+      </div>
+    </div>
+
+    <main class="page">
+      <!-- Page title with star icon -->
+      <header class="page-title">
+        <h1 class="page-title-text">Interactive Dashboard</h1>
+        <span class="page-title-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 31 27" fill="currentColor">
+            <path d="M15.5 0l-2.708 5.278c-.307.574-.857.52-1.408.2l-1.96-1.06 1.46 8.107c.308 1.481-.678 1.481-1.164.841L6.3 9.363l-.556 2.033c-.064.267-.345.547-.768.48l-4.325-.95 1.136 4.318c.243.96.433 1.358-.245 1.612L0 17.613l7.445 6.323c.295.239.444.669.34 1.058l-.653 2.236c2.564-.31 4.863-.586 7.426-.894.228-.003.605.2.604.474l-.34 8.19h1.247l-.196-8.173c-.002-.274.34-.494.568-.491l7.426.894-.651-2.236c-.105-.39.044-.82.338-1.058L31 17.613l-1.542-.757c-.678-.254-.489-.652-.245-1.612l1.136-4.318-4.325.95c-.423.067-.704-.213-.768-.48L24.7 9.363l-3.42 4.003c-.487.64-1.472.64-1.165-.84l1.461-8.109-1.96 1.062c-.55.32-1.1.373-1.408-.2L15.5 0z"/>
+          </svg>
+        </span>
+        <h1 class="page-title-text">The Canadian iMicroSeq Data Portal</h1>
+      </header>
+
+      <!-- Explore / SampleFieldSpec chart (same as index page) -->
+      <section class="explore-panel lazy-section" data-chart="sample">
+        <header class="explore-header">
+          <div class="explore-kicker">
+            <span class="explore-badge">Explore</span>
+            <span class="explore-kicker-text">Sample field breakdown</span>
+          </div>
+          <p class="explore-subtitle">
+            Interactive data visualizer. Choose plot type, X axis, and segment by field.
+          </p>
+        </header>
+
+        <div class="explore-content">
+          <div class="explore-chart-area">
+            <div class="axis-selects">
+              <label class="field-select">
+                <span class="label">Plot type</span>
+                <select id="sample-chart-plot-type">
+                  <option value="stacked-bar">Stacked bar</option>
+                  <option value="line">Line</option>
+                </select>
+              </label>
+              <label class="field-select">
+                <span class="label">X axis</span>
+                <select id="sample-chart-x"></select>
+              </label>
+              <label class="field-select" id="sample-chart-y-wrap">
+                <span class="label">Segment By</span>
+                <select id="sample-chart-y"></select>
+              </label>
+            </div>
+            <div id="sample-chart" class="sample-chart"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Viral Loads: full-width like sample field breakdown -->
+      <section class="viral-load-panel lazy-section" data-chart="viral-load">
+        <header class="explore-header">
+          <div class="explore-kicker">
+            <span class="explore-badge">Viral Loads</span>
+            <span class="explore-kicker-text">Average measurement value over time</span>
+          </div>
+          <p class="explore-subtitle">
+            Filter by location and assay. Choose measurement unit for the Y-axis.
+          </p>
+        </header>
+        <div class="viral-load-content">
+          <div class="viral-load-filters">
+            <div class="viral-filter-row">
+              <label class="field-select viral-field-select">
+                <span class="label">Province</span>
+                <select id="viral-province"></select>
+              </label>
+              <label class="field-select viral-field-select">
+                <span class="label">City</span>
+                <select id="viral-city"></select>
+              </label>
+              <label class="field-select viral-field-select">
+                <span class="label">Site</span>
+                <select id="viral-site"></select>
+              </label>
+              <label class="field-select viral-field-select">
+                <span class="label">Assay type</span>
+                <select id="viral-assay"></select>
+              </label>
+            </div>
+            <div class="viral-filter-row">
+              <label class="field-select viral-field-select">
+                <span class="label">Organism</span>
+                <select id="viral-organism"></select>
+              </label>
+              <label class="field-select viral-field-select">
+                <span class="label">Gene Symbol</span>
+                <select id="viral-gene"></select>
+              </label>
+              <label class="field-select viral-field-select">
+                <span class="label">Measurement Unit <br> *TEMP: Data is not normalized, each unit is a different set of measurements*</span>
+                <select id="viral-unit"></select>
+              </label>
+            </div>
+          </div>
+          <div class="viral-date-range-wrap" id="viral-date-range">
+            <div class="viral-date-range-label">
+              <span id="viral-date-from-label">—</span>
+              <span aria-hidden="true"> to </span>
+              <span id="viral-date-to-label">—</span>
+            </div>
+            <div class="viral-date-dual-slider" role="group" aria-label="Date range">
+              <input type="range" id="viral-date-from" min="0" max="0" value="0" aria-label="From date" />
+              <input type="range" id="viral-date-to" min="0" max="0" value="0" aria-label="To date" />
+            </div>
+            <label class="viral-show-line-toggle">
+              <input type="checkbox" id="viral-show-line" class="viral-toggle-input" checked aria-describedby="viral-show-line-desc" />
+              <span class="viral-toggle-track" aria-hidden="true"></span>
+              <span id="viral-show-line-desc" class="viral-toggle-label">Show line between points</span>
+            </label>
+          </div>
+          <div id="viral-load-chart" class="viral-load-chart"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
