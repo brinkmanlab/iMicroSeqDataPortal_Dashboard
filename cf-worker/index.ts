@@ -1,39 +1,35 @@
 // Cloudflare Worker entry: serves /api/dashboard and static assets
-import { loadDashboardData } from "./dashboard-data";
+import type { DashboardData } from "./dashboard-data";
 
 /** Worker bindings: ASSETS is the static asset fetcher (public folder) */
 export interface Env {
   ASSETS: Fetcher;
 }
 
-// Cache dashboard data in memory for the lifetime of the isolate (reduces fetches)
-let cachedData: Awaited<ReturnType<typeof loadDashboardData>> | null = null;
-
 /** Decompress gzip stream and parse JSON (built-in DecompressionStream) */
 async function decompressJsonFromGz(
   body: ReadableStream<Uint8Array>
-): Promise<Awaited<ReturnType<typeof loadDashboardData>>> {
+): Promise<DashboardData> {
   const decompressed = new Response(
     body.pipeThrough(new DecompressionStream("gzip"))
   );
   const text = await decompressed.text();
-  return JSON.parse(text) as Awaited<ReturnType<typeof loadDashboardData>>;
+  return JSON.parse(text) as DashboardData;
 }
 
-/** Prefer static data/portalData.json.gz from assets (built by scripts/build_dashboard_data.py) */
+/** Load dashboard data from static data/portalData.json.gz (built by scripts/build_dashboard_data.py) */
 async function getDashboardData(
   request: Request,
   env: Env
-): Promise<Awaited<ReturnType<typeof loadDashboardData>>> {
+): Promise<DashboardData> {
   const dataUrl = new URL("/data/portalData.json.gz", request.url);
   const staticRes = await env.ASSETS.fetch(dataUrl);
   if (staticRes.ok && staticRes.body) {
     return decompressJsonFromGz(staticRes.body as ReadableStream<Uint8Array>);
   }
-  if (!cachedData) {
-    cachedData = await loadDashboardData();
-  }
-  return cachedData;
+  throw new Error(
+    "Dashboard data not available; deploy public/data/portalData.json.gz"
+  );
 }
 
 export default {
@@ -45,7 +41,7 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
 
-    // API route: return aggregated dashboard data (static portalData.json.gz or live from GitHub)
+    // API route: return aggregated dashboard data from static portalData.json.gz
     if (url.pathname === "/api/dashboard") {
       try {
         const data = await getDashboardData(request, env);
