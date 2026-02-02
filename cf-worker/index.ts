@@ -20,12 +20,12 @@ async function decompressJsonFromGz(
   return JSON.parse(text) as Awaited<ReturnType<typeof loadDashboardData>>;
 }
 
-/** Prefer static data/data.json.gz from assets (built by scripts/build_dashboard_data.py) */
+/** Prefer static data/portalData.json.gz from assets (built by scripts/build_dashboard_data.py) */
 async function getDashboardData(
   request: Request,
   env: Env
 ): Promise<Awaited<ReturnType<typeof loadDashboardData>>> {
-  const dataUrl = new URL("/data/data.json.gz", request.url);
+  const dataUrl = new URL("/data/portalData.json.gz", request.url);
   const staticRes = await env.ASSETS.fetch(dataUrl);
   if (staticRes.ok && staticRes.body) {
     return decompressJsonFromGz(staticRes.body as ReadableStream<Uint8Array>);
@@ -45,7 +45,7 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
 
-    // API route: return aggregated dashboard data (static data.json.gz or live from GitHub)
+    // API route: return aggregated dashboard data (static portalData.json.gz or live from GitHub)
     if (url.pathname === "/api/dashboard") {
       try {
         const data = await getDashboardData(request, env);

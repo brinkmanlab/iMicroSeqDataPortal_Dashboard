@@ -98,41 +98,6 @@
           <div id="coverage-chart" class="chart-large"></div>
       </section>
 
-      <!-- Explore: axis selects + Vega-Lite chart (stacked bar or line) -->
-      <section class="explore-panel lazy-section" data-chart="sample">
-        <header class="explore-header">
-          <div class="explore-kicker">
-            <span class="explore-badge">Explore</span>
-            <span class="explore-kicker-text">Inside the iMicroSeq Data Portal</span>
-          </div>
-          <p class="explore-subtitle">
-            A brief, interactive data visualizer. Best viewed in landscape mode.
-          </p>
-        </header>
-
-        <div class="explore-content">
-          <div class="explore-chart-area">
-            <!-- Plot type, X axis, Segment By (Y) – wired in app.js -->
-            <div class="axis-selects">
-              <label class="field-select">
-                <span class="label">Plot type</span>
-                <select id="sample-chart-plot-type">
-                  <option value="stacked-bar">Stacked bar</option>
-                  <option value="line">Line</option>
-                </select>
-              </label>
-              <label class="field-select">
-                <span class="label">X axis</span>
-                <select id="sample-chart-x"></select>
-              </label>
-              <label class="field-select" id="sample-chart-y-wrap">
-                <span class="label">Segment By</span>
-                <select id="sample-chart-y"></select>
-              </label>
-            </div>
-            <div id="sample-chart" class="sample-chart"></div>
-          </div>
-
           <!-- CTA buttons: portal explorer and interactive dashboard -->
           <div class="explore-actions">
             <button type="button" class="explore-cta" onclick="window.location.href='https://portal-ui.imicroseq-dataportal.ca/explorer/environmental'">View the data on the iMicroSeq Data Portal</button>

@@ -148,14 +148,14 @@ def main() -> None:
         return obj
 
     out_data = to_sorted_dict(nested)
-    out_path = DATA_DIR / "quant.json.gz"
+    out_path = DATA_DIR / "viralLoadData.json.gz"
     json_bytes = json.dumps(out_data, ensure_ascii=False).encode("utf-8")
     with gzip.open(out_path, "wb", compresslevel=6) as f:
         f.write(json_bytes)
     print(f"Wrote {out_path} ({len(out_rows)} rows)")
 
-    # Copy to public/data/ so the dashboard can fetch it as data/quant.json.gz
-    public_quant = REPO_ROOT / "public" / "data" / "quant.json.gz"
+    # Copy to public/data/ so the dashboard can fetch it as data/viralLoadData.json.gz
+    public_quant = REPO_ROOT / "public" / "data" / "viralLoadData.json.gz"
     public_quant.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(out_path, public_quant)
     print(f"Copied to {public_quant}")
