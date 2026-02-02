@@ -513,6 +513,467 @@ function initSampleChart(data) {
   return updateSampleChart();
 }
 
+// ——— Viral Loads: quant.json.gz (8-level nested, leaf = date -> [values]) ———
+const QUANT_DATA_URL = 'data/quant.json.gz';
+const TREND_LEGEND_LABEL = 'Trend';
+
+async function fetchQuantData() {
+  const res = await fetch(QUANT_DATA_URL);
+  if (!res.ok) throw new Error(`Failed to load quant data: ${res.status}`);
+  const body = res.body;
+  if (!body) throw new Error('No response body');
+  const decompressed = new Response(body.pipeThrough(new DecompressionStream('gzip')));
+  const text = await decompressed.text();
+  const data = JSON.parse(text);
+  // Debug: print structure (provinces and one sample leaf)
+  const provinces = Object.keys(data);
+  console.log('[Viral Load] Quant data loaded:', {
+    topLevelKeys: provinces,
+    topLevelKeyCount: provinces.length,
+    samplePath: provinces[0]
+    ? (() => {
+        let o = data[provinces[0]];
+        const path = [provinces[0]];
+        for (let d = 0; d < 6 && o && typeof o === 'object' && !Array.isArray(o); d++) {
+          const k = Object.keys(o)[0];
+          path.push(k);
+          o = o[k];
+        }
+        if (o && typeof o === 'object' && !Array.isArray(o)) {
+          const dateKey = Object.keys(o)[0];
+          path.push(dateKey);
+          const leaf = o[dateKey];
+          path.push(typeof leaf, Array.isArray(leaf) ? 'array' : (leaf && typeof leaf === 'object' ? 'object(' + Object.keys(leaf).length + ' keys)' : String(leaf)));
+        }
+        return path;
+      })()
+    : 'no provinces'
+  });
+  console.log('[Viral Load] Full quant data (first 2 levels):', JSON.stringify(
+    provinces.length ? { [provinces[0]]: Object.keys(data[provinces[0]] || {}) } : {},
+    null,
+    2
+  ));
+  return data;
+}
+
+/** Nested quant: level 1=Province, 2=City, 3=Site, 4=Assay, 5=Organism, 6=Gene, 7=Unit, 8=date -> [value strings] */
+function getViralLoadOptionsAtLevel(nested, level, selections) {
+  const keys = new Set();
+  const sel = [selections.province, selections.city, selections.site, selections.assayType, selections.organism, selections.geneSymbol, selections.measurementUnit];
+
+  function walk(obj, depth) {
+    if (depth === level) {
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) Object.keys(obj).forEach((k) => keys.add(k));
+      return;
+    }
+    const s = sel[depth];
+    const nextKeys = s && s !== 'All' ? [s] : Object.keys(obj || {});
+    for (const k of nextKeys) {
+      if (obj && obj[k] && typeof obj[k] === 'object') walk(obj[k], depth + 1);
+    }
+  }
+  walk(nested, 0);
+  return [...keys].sort();
+}
+
+// Leaf values in quant.json are serialized as objects { "0": v, "1": v, ... } by Python, not arrays
+function leafToNumbers(leaf) {
+  if (Array.isArray(leaf)) return leaf.map((s) => parseFloat(String(s).trim())).filter((n) => Number.isFinite(n));
+  if (leaf && typeof leaf === 'object') return Object.values(leaf).map((s) => parseFloat(String(s).trim())).filter((n) => Number.isFinite(n));
+  return [];
+}
+
+// Collect by (date, measurementUnit); keep average and individual values for tooltip
+function collectViralLoadSeries(nested, selections) {
+  const keyToValues = Object.create(null); // "date\u241Eunit" -> number[] (record sep avoids | in labels)
+  const sep = '\u241E';
+  const sel = [selections.province, selections.city, selections.site, selections.assayType, selections.organism, selections.geneSymbol, selections.measurementUnit];
+
+  function walk(obj, depth, currentUnit) {
+    if (depth === 7) {
+      if (!obj || typeof obj !== 'object') return;
+      for (const [date, leaf] of Object.entries(obj)) {
+        const nums = leafToNumbers(leaf);
+        if (nums.length && currentUnit != null) {
+          const key = date + sep + currentUnit;
+          if (!keyToValues[key]) keyToValues[key] = [];
+          keyToValues[key].push(...nums);
+        }
+      }
+      return;
+    }
+    const s = sel[depth];
+    const nextKeys = s && s !== 'All' ? [s] : Object.keys(obj || {});
+    const isUnitLevel = depth === 6;
+    for (const k of nextKeys) {
+      if (obj && obj[k] && typeof obj[k] === 'object') {
+        walk(obj[k], depth + 1, isUnitLevel ? k : currentUnit);
+      }
+    }
+  }
+  walk(nested, 0, null);
+
+  const result = Object.entries(keyToValues)
+    .map(([key, vals]) => {
+      const i = key.indexOf(sep);
+      const date = i >= 0 ? key.slice(0, i) : key;
+      const measurementUnit = i >= 0 ? key.slice(i + sep.length) : '';
+      const n = vals.length;
+      const value = vals.reduce((a, b) => a + b, 0) / n;
+      const variance = n > 1 ? vals.reduce((s, v) => s + (v - value) ** 2, 0) / (n - 1) : 0;
+      const stdDev = Math.sqrt(variance);
+      const stderr = n > 0 ? stdDev / Math.sqrt(n) : 0;
+      const errorLow = value - stderr;
+      const errorHigh = value + stderr;
+      const valuesList = vals.map((v) => (Number.isInteger(v) ? String(v) : v.toFixed(4))).join(', ');
+      return { date, measurementUnit, value, values: vals, valuesList, errorLow, errorHigh };
+    })
+    .filter((d) => d.value != null && Number.isFinite(d.value))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.measurementUnit).localeCompare(String(b.measurementUnit)));
+
+  console.log('[Viral Load] Selections:', selections);
+  console.log('[Viral Load] Collected series (count, first 5):', result.length, result.slice(0, 5));
+  console.log('[Viral Load] Full collected data:', result);
+  return result;
+}
+
+// Local quadratic fit with span 0.2 (20% of points per window) per measurementUnit series
+const TREND_SPAN = 0.2;
+
+function quadraticFitAt(xVals, yVals, xQuery) {
+  const n = xVals.length;
+  if (n < 3) return n === 1 ? yVals[0] : n === 2 ? (yVals[0] + yVals[1]) / 2 : 0;
+  let sx = 0, sx2 = 0, sx3 = 0, sx4 = 0, sy = 0, sxy = 0, sx2y = 0;
+  for (let j = 0; j < n; j++) {
+    const x = xVals[j];
+    const y = yVals[j];
+    const x2 = x * x;
+    sx += x;
+    sx2 += x2;
+    sx3 += x2 * x;
+    sx4 += x2 * x2;
+    sy += y;
+    sxy += x * y;
+    sx2y += x2 * y;
+  }
+  const M = [
+    [sx4, sx3, sx2],
+    [sx3, sx2, sx],
+    [sx2, sx, n]
+  ];
+  const v = [sx2y, sxy, sy];
+  const c = solve3(M, v);
+  if (c == null) return yVals[Math.floor(n / 2)];
+  return c[0] * xQuery * xQuery + c[1] * xQuery + c[2];
+}
+
+function solve3(M, v) {
+  const a = M[0][0], b = M[0][1], c = M[0][2];
+  const d = M[1][0], e = M[1][1], f = M[1][2];
+  const g = M[2][0], h = M[2][1], i = M[2][2];
+  const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (Math.abs(det) < 1e-12) return null;
+  const v0 = v[0], v1 = v[1], v2 = v[2];
+  return [
+    (v0 * (e * i - f * h) - b * (v1 * i - v2 * f) + c * (v1 * h - v2 * e)) / det,
+    (a * (v1 * i - v2 * f) - v0 * (d * i - f * g) + c * (v2 * d - v1 * g)) / det,
+    (a * (e * v2 - v1 * h) - b * (d * v2 - v1 * g) + v0 * (d * h - e * g)) / det
+  ];
+}
+
+function addSmoothingTrend(data) {
+  if (!data || data.length === 0) return data;
+  const byUnit = {};
+  for (const d of data) {
+    const u = d.measurementUnit;
+    if (!byUnit[u]) byUnit[u] = [];
+    byUnit[u].push({ ...d });
+  }
+  const out = [];
+  for (const unit of Object.keys(byUnit)) {
+    const arr = byUnit[unit].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const n = arr.length;
+    const k = Math.max(3, Math.min(n, Math.round(n * TREND_SPAN)));
+    const half = Math.floor((k - 1) / 2);
+    for (let i = 0; i < n; i++) {
+      const start = Math.max(0, i - half);
+      const end = Math.min(n, start + k);
+      const xVals = [];
+      const yVals = [];
+      for (let j = start; j < end; j++) {
+        xVals.push(j - start);
+        yVals.push(arr[j].value);
+      }
+      const xQuery = i - start;
+      const valueSmooth = quadraticFitAt(xVals, yVals, xQuery);
+      out.push({ ...arr[i], valueSmooth: Number.isFinite(valueSmooth) ? valueSmooth : arr[i].value, lineType: TREND_LEGEND_LABEL });
+    }
+  }
+  return out;
+}
+
+function createViralLoadLineSpec(data, yAxisTitle, showLine = true) {
+  const yTitle = (yAxisTitle && String(yAxisTitle).trim()) ? String(yAxisTitle).trim() : 'Average value';
+  if (!data || data.length === 0) {
+    return {
+      $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
+      description: 'Viral load chart',
+      data: { values: [{}] },
+      mark: { type: 'text', align: 'center', fontSize: 14 },
+      encoding: { text: { value: 'No data for selected filters' } }
+    };
+  }
+  const dataWithTrend = addSmoothingTrend(data);
+  const dataMark = showLine
+    ? { type: 'line', point: true, interpolate: 'linear', strokeWidth: 2.5 }
+    : { type: 'point', size: 60, filled: true, strokeWidth: 1 };
+  return {
+    $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
+    description: 'Viral load line by date and measurement unit with error bars (SEM) and trend',
+    width: 'container',
+    height: 640,
+    autosize: { type: 'fit', contains: 'padding' },
+    data: { values: dataWithTrend },
+    layer: [
+      {
+        mark: { type: 'rule', size: 1.5, color: '#a8b3c4', opacity: 0.7 },
+        encoding: {
+          x: { field: 'date', type: 'temporal', axis: { title: 'Date', labelOverlap: true, format: '%b %d, %Y' } },
+          y: { field: 'errorLow', type: 'quantitative' },
+          y2: { field: 'errorHigh', type: 'quantitative' }
+        }
+      },
+      {
+        mark: dataMark,
+        encoding: {
+          x: { field: 'date', type: 'temporal', axis: { title: 'Date', labelOverlap: true, format: '%b %d, %Y' } },
+          y: { field: 'value', type: 'quantitative', axis: { title: yTitle }, scale: { nice: true, zero: true, domainMin: 0 } },
+          color: {
+            field: 'measurementUnit',
+            type: 'nominal',
+            scale: { range: CATEGORY_PALETTE },
+            legend: { title: 'Measurement unit' }
+          },
+          tooltip: [
+            { field: 'date', type: 'temporal', title: 'Date' },
+            { field: 'measurementUnit', type: 'nominal', title: 'Measurement unit' },
+            { field: 'value', type: 'quantitative', title: 'Average', format: '.4f' },
+            { field: 'valuesList', type: 'nominal', title: 'Datapoints' }
+          ]
+        }
+      },
+      {
+        mark: { type: 'line', interpolate: 'linear', strokeWidth: 4, opacity: 1, color: '#6b7280' },
+        encoding: {
+          x: { field: 'date', type: 'temporal', axis: { title: 'Date', labelOverlap: true, format: '%b %d, %Y' } },
+          y: { field: 'valueSmooth', type: 'quantitative', axis: { title: yTitle }, scale: { nice: true, zero: true, domainMin: 0 } },
+          strokeDash: {
+            field: 'lineType',
+            type: 'nominal',
+            scale: { domain: [TREND_LEGEND_LABEL], range: [[8, 5]] },
+            legend: { title: null }
+          }
+        }
+      }
+    ]
+  };
+}
+
+function populateViralLoadSelect(selectId, options, prependAll = false) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const current = sel.value;
+  sel.textContent = '';
+  if (prependAll) {
+    const all = document.createElement('option');
+    all.value = 'All';
+    all.textContent = 'All';
+    sel.appendChild(all);
+  }
+  const blankLabel = 'Not Provided';
+  for (const opt of options) {
+    const o = document.createElement('option');
+    o.value = opt;
+    o.textContent = (opt === '(blank)' || opt === '') ? blankLabel : opt;
+    sel.appendChild(o);
+  }
+  if (options.includes(current)) sel.value = current;
+  else if (prependAll && options.length) sel.value = 'All';
+  else if (options.length) sel.value = options[0];
+}
+
+function initViralLoadChart() {
+  const ids = ['viral-province', 'viral-city', 'viral-site', 'viral-assay', 'viral-organism', 'viral-gene', 'viral-unit'];
+  const getSelections = () => ({
+    province: document.getElementById('viral-province')?.value ?? '',
+    city: document.getElementById('viral-city')?.value ?? '',
+    site: document.getElementById('viral-site')?.value ?? '',
+    assayType: document.getElementById('viral-assay')?.value ?? '',
+    organism: document.getElementById('viral-organism')?.value ?? '',
+    geneSymbol: document.getElementById('viral-gene')?.value ?? '',
+    measurementUnit: document.getElementById('viral-unit')?.value ?? ''
+  });
+
+  let quantData = null;
+  let currentDateList = []; // sorted unique dates from current filtered data
+
+  // Index of first date that is within the last 6 months of the max date (or 0 if unparseable)
+  function indexForLast6Months(dates) {
+    if (!dates || dates.length === 0) return 0;
+    const lastStr = String(dates[dates.length - 1]);
+    const lastDate = new Date(lastStr);
+    if (Number.isNaN(lastDate.getTime())) return Math.max(0, dates.length - 6);
+    const sixMonthsAgo = new Date(lastDate);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    for (let i = 0; i < dates.length; i++) {
+      const d = new Date(String(dates[i]));
+      if (!Number.isNaN(d.getTime()) && d >= sixMonthsAgo) return i;
+    }
+    return 0;
+  }
+
+  const updateChart = (preserveDateRange = false) => {
+    if (!quantData) return;
+    const selections = getSelections();
+    const fullData = collectViralLoadSeries(quantData, selections);
+    const dates = [...new Set(fullData.map((d) => d.date))].sort((a, b) => String(a).localeCompare(String(b)));
+    currentDateList = dates;
+    const n = dates.length;
+
+    const fromEl = document.getElementById('viral-date-from');
+    const toEl = document.getElementById('viral-date-to');
+    const fromLabel = document.getElementById('viral-date-from-label');
+    const toLabel = document.getElementById('viral-date-to-label');
+    const rangeWrap = document.getElementById('viral-date-range');
+
+    if (n === 0) {
+      if (rangeWrap) rangeWrap.classList.add('hidden');
+      const showLine = document.getElementById('viral-show-line')?.checked !== false;
+      vegaEmbed('#viral-load-chart', createViralLoadLineSpec([], selections.measurementUnit, showLine), { actions: false }).catch((err) => console.error('Viral load chart:', err));
+      return;
+    }
+    if (rangeWrap) rangeWrap.classList.remove('hidden');
+
+    fromEl.min = 0;
+    fromEl.max = n - 1;
+    toEl.min = 0;
+    toEl.max = n - 1;
+    let toIdx;
+    let fromIdx;
+    if (preserveDateRange) {
+      fromIdx = Math.min(n - 1, Math.max(0, Number(fromEl.value) || 0));
+      toIdx = Math.min(n - 1, Math.max(0, Number(toEl.value) ?? n - 1));
+      if (fromIdx > toIdx) toIdx = fromIdx;
+      if (toIdx < fromIdx) fromIdx = toIdx;
+      fromEl.value = fromIdx;
+      toEl.value = toIdx;
+    } else {
+      toIdx = n - 1;
+      fromIdx = indexForLast6Months(dates);
+      if (fromIdx > toIdx) fromIdx = toIdx;
+      fromEl.value = fromIdx;
+      toEl.value = toIdx;
+    }
+
+    const dateMin = dates[fromIdx];
+    const dateMax = dates[toIdx];
+    fromLabel.textContent = dateMin;
+    toLabel.textContent = dateMax;
+
+    const filteredData = fullData.filter((d) => {
+      const t = String(d.date);
+      return t >= String(dateMin) && t <= String(dateMax);
+    });
+    const yTitle = selections.measurementUnit || 'Average value';
+    const showLine = document.getElementById('viral-show-line')?.checked !== false;
+    console.log('[Viral Load] updateChart: data points =', filteredData.length, '(date range', dateMin, '–', dateMax, ')');
+    vegaEmbed('#viral-load-chart', createViralLoadLineSpec(filteredData, yTitle, showLine), { actions: false }).catch((err) => console.error('Viral load chart:', err));
+  };
+
+  const onDateRangeInput = () => {
+    const fromEl = document.getElementById('viral-date-from');
+    const toEl = document.getElementById('viral-date-to');
+    const fromLabel = document.getElementById('viral-date-from-label');
+    const toLabel = document.getElementById('viral-date-to-label');
+    const dates = currentDateList;
+    const n = dates.length;
+    if (n === 0) return;
+    let fromIdx = Math.max(0, Math.min(n - 1, Number(fromEl.value) || 0));
+    let toIdx = Math.max(0, Math.min(n - 1, Number(toEl.value) ?? n - 1));
+    if (fromIdx > toIdx) toIdx = fromIdx;
+    if (toIdx < fromIdx) fromIdx = toIdx;
+    fromEl.value = fromIdx;
+    toEl.value = toIdx;
+    fromLabel.textContent = dates[fromIdx];
+    toLabel.textContent = dates[toIdx];
+    // Re-filter current data by date range and re-render (no new collect)
+    const dateMin = dates[fromIdx];
+    const dateMax = dates[toIdx];
+    const selections = getSelections();
+    const fullData = collectViralLoadSeries(quantData, selections);
+    const filteredData = fullData.filter((d) => {
+      const t = String(d.date);
+      return t >= String(dateMin) && t <= String(dateMax);
+    });
+    const yTitle = getSelections().measurementUnit || 'Average value';
+    const showLine = document.getElementById('viral-show-line')?.checked !== false;
+    vegaEmbed('#viral-load-chart', createViralLoadLineSpec(filteredData, yTitle, showLine), { actions: false }).catch((err) => console.error('Viral load chart:', err));
+  };
+
+  const updateDependentDropdowns = () => {
+    if (!quantData) return;
+    const selections = getSelections();
+    const cityOpts = getViralLoadOptionsAtLevel(quantData, 1, selections);
+    populateViralLoadSelect('viral-city', cityOpts, true);
+    const siteOpts = getViralLoadOptionsAtLevel(quantData, 2, getSelections());
+    populateViralLoadSelect('viral-site', siteOpts, true);
+    const assayOpts = getViralLoadOptionsAtLevel(quantData, 3, getSelections());
+    populateViralLoadSelect('viral-assay', assayOpts, true);
+    const organismOpts = getViralLoadOptionsAtLevel(quantData, 4, getSelections());
+    populateViralLoadSelect('viral-organism', organismOpts);
+    const geneOpts = getViralLoadOptionsAtLevel(quantData, 5, getSelections());
+    populateViralLoadSelect('viral-gene', geneOpts, true);
+    const unitOpts = getViralLoadOptionsAtLevel(quantData, 6, getSelections());
+    populateViralLoadSelect('viral-unit', unitOpts);
+    updateChart();
+  };
+
+  return fetchQuantData()
+    .then((data) => {
+      quantData = data;
+      const provinceOpts = getViralLoadOptionsAtLevel(data, 0, {});
+      populateViralLoadSelect('viral-province', provinceOpts);
+      if (provinceOpts.length) updateDependentDropdowns();
+
+      ids.forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', () => {
+          if (id === 'viral-province') updateDependentDropdowns();
+          else if (id === 'viral-city') updateDependentDropdowns();
+          else {
+            updateDependentDropdowns();
+          }
+        });
+      });
+      document.getElementById('viral-date-from')?.addEventListener('input', onDateRangeInput);
+      document.getElementById('viral-date-to')?.addEventListener('input', onDateRangeInput);
+      document.getElementById('viral-show-line')?.addEventListener('change', () => updateChart(true));
+    })
+    .catch((err) => {
+      console.error('Viral load data:', err);
+      const chartEl = document.getElementById('viral-load-chart');
+      const msg = err && err.message ? err.message : String(err);
+      chartEl.innerHTML = '<p class="explore-subtitle">Failed to load viral load data. ' +
+        'Ensure <code>public/data/quant.json.gz</code> exists and the app is served over HTTP (e.g. <code>npx serve public</code> or <code>python -m http.server --directory public</code>). ' +
+        'Opening the HTML file directly (file://) will not load data.</p>' +
+        (msg ? '<p class="explore-subtitle viral-load-err-detail"></p>' : '');
+      if (msg) {
+        const detail = chartEl.querySelector('.viral-load-err-detail');
+        if (detail) detail.textContent = 'Error: ' + msg;
+      }
+    });
+}
+
 function hideLoadingOverlay() {
   const overlay = document.getElementById('loading-overlay');
   if (!overlay) return;
@@ -555,6 +1016,8 @@ async function initDashboard() {
             }
           } else if (chart === 'sample') {
             initSampleChart(data).catch((err) => console.error('Sample chart:', err));
+          } else if (chart === 'viral-load') {
+            initViralLoadChart().catch((err) => console.error('Viral load chart:', err));
           }
         });
       },
