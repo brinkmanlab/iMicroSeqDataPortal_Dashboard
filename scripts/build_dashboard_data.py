@@ -8,12 +8,12 @@ Cloudflare Worker, and writes:
 
   - data/data.json        : full dashboard API payload
   - data/data.tsv         : sampleFieldSpecRows as TSV (Explore chart table)
-  - public/data/data.json.gz : same payload gzip-compressed for Worker assets
+  - public/data/portalData.json.gz : same payload gzip-compressed for Worker assets
 
 Run from repo root:
   python scripts/build_dashboard_data.py
 
-The Worker serves /api/dashboard from public/data/data.json.gz when present;
+The Worker serves /api/dashboard from public/data/portalData.json.gz when present;
 otherwise it falls back to loading from GitHub.
 """
 
@@ -32,7 +32,7 @@ CSV_XZ = DATA_DIR / "imicroseq.csv.xz"
 PROVINCE_COORDS_CSV = DATA_DIR / "ProvinceCapitalCoords.csv"
 OUTPUT_JSON = DATA_DIR / "data.json"
 OUTPUT_TSV = DATA_DIR / "data.tsv"
-OUTPUT_JSON_GZ_PUBLIC = PUBLIC_DATA_DIR / "data.json.gz"
+OUTPUT_JSON_GZ_PUBLIC = PUBLIC_DATA_DIR / "portalData.json.gz"
 
 
 def trim_brackets(s: str | None) -> str:

@@ -513,8 +513,8 @@ function initSampleChart(data) {
   return updateSampleChart();
 }
 
-// ——— Viral Loads: quant.json.gz (8-level nested, leaf = date -> [values]) ———
-const QUANT_DATA_URL = 'data/quant.json.gz';
+// ——— Viral Loads: viralLoadData.json.gz (8-level nested, leaf = date -> [values]) ———
+const QUANT_DATA_URL = 'data/viralLoadData.json.gz';
 const TREND_LEGEND_LABEL = 'Trend';
 
 async function fetchQuantData() {
@@ -577,7 +577,7 @@ function getViralLoadOptionsAtLevel(nested, level, selections) {
   return [...keys].sort();
 }
 
-// Leaf values in quant.json are serialized as objects { "0": v, "1": v, ... } by Python, not arrays
+// Leaf values in viralLoadData.json are serialized as objects { "0": v, "1": v, ... } by Python, not arrays
 function leafToNumbers(leaf) {
   if (Array.isArray(leaf)) return leaf.map((s) => parseFloat(String(s).trim())).filter((n) => Number.isFinite(n));
   if (leaf && typeof leaf === 'object') return Object.values(leaf).map((s) => parseFloat(String(s).trim())).filter((n) => Number.isFinite(n));
@@ -964,8 +964,7 @@ function initViralLoadChart() {
       const chartEl = document.getElementById('viral-load-chart');
       const msg = err && err.message ? err.message : String(err);
       chartEl.innerHTML = '<p class="explore-subtitle">Failed to load viral load data. ' +
-        'Ensure <code>public/data/quant.json.gz</code> exists and the app is served over HTTP (e.g. <code>npx serve public</code> or <code>python -m http.server --directory public</code>). ' +
-        'Opening the HTML file directly (file://) will not load data.</p>' +
+        'Because this site is hosted on Cloudflare, it may be blocked by ad blockers. Please disable any ad blockers and try again.' +
         (msg ? '<p class="explore-subtitle viral-load-err-detail"></p>' : '');
       if (msg) {
         const detail = chartEl.querySelector('.viral-load-err-detail');
