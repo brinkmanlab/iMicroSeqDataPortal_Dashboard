@@ -193,7 +193,7 @@ function initLeafletMap(container, points) {
     const maxCount = Math.max(...points.map((d) => d.count), 1);
     points.forEach((d) => {
       const radius = Math.max(6, Math.min(30, 4 + (d.count / maxCount) * 10));
-      const fillOpacity = Math.min(0.8, 0.1 + (d.count / 10000));
+      const fillOpacity = Math.min(0.8, 0.4 + (d.count / maxCount) * 0.3);
       const marker = L.circleMarker([d.latitude, d.longitude], {
         radius,
         fillColor: '#000080',
