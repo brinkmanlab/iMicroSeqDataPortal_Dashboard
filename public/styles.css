@@ -111,7 +111,7 @@ body {
   display: block;
 }
 
-/* Nav bar: fills remaining header, links on left */
+/* Nav bar: fills remaining header, PoC notice + links */
 .header-nav {
   flex: 1;
   display: flex;
@@ -120,6 +120,13 @@ body {
   gap: 2rem;
   padding: 0 2rem;
   background: #1a2f4a;
+}
+
+.header-poc-notice {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.85rem;
+  font-style: italic;
+  margin-right: auto;
 }
 
 .header-link {
