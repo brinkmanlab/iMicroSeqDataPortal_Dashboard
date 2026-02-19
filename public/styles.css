@@ -150,7 +150,7 @@ body {
   padding: 0 1.5rem 3rem;
 }
 
-/* Page title row: icon + "At a Glance" + "The Canadian iMicroSeq Data Portal" */
+/* Page title row: logo (parallelogram) + "At a Glance" + icon + "The Canadian iMicroSeq Data Portal" */
 .page-title {
   display: flex;
   align-items: center;
@@ -158,6 +158,25 @@ body {
   gap: 0.75rem;
   margin-bottom: 2rem;
   flex-wrap: wrap;
+}
+
+/* White parallelogram panel for logo to the left of "At a Glance" */
+.page-title-logo {
+  background: #ffffff;
+  clip-path: polygon(8% 0, 100% 0, 92% 100%, 0 100%);
+  padding: 0.5rem 1.25rem 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.page-title-logo-img {
+  height: 2.5rem;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  display: block;
 }
 
 .page-title-icon {
