@@ -1,4 +1,4 @@
-name = "imicroseq-dashboard"
+name = "dashboard-imicroseq-dataportal-ca"
 main = "cf-worker/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
