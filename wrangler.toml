@@ -4,7 +4,7 @@ compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
 routes = [
-  { pattern = "imicroseq-dashboard.bfjia.net", zone_name = "bfjia.net", custom_domain = true }
+  { pattern = "dashboard.imicroseq-dataportal.ca", zone_name = "imicroseq-dataportal.ca", custom_domain = true }
 ]
 
 [assets]
