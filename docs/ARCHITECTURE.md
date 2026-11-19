@@ -1,0 +1,169 @@
+# Architecture
+
+Proof-of-concept dashboard for the [Canadian iMicroSeq Data Portal](https://imicroseq-dataportal.ca/). Vanilla JavaScript (ES modules), no framework, no bundler. Charts: Vega-Lite. Map: Leaflet. Hosting: Cloudflare Workers free tier (a hard constraint, see [Free-tier budget](#free-tier-budget)).
+
+## Overview
+
+```
+Browser ── pages, JS, viral data files ──► Cloudflare static assets (free, no Worker run)
+   ├── POST /api/graphql ──► Worker ──► edge cache (1 h) ──► portal GraphQL API
+   └── GET  /tiles/...   ──► Worker ──► CARTO basemap (API key added here)
+Push to main, or nightly Worker cron ──► deploy hook ──► Workers Builds: npm test ── build viral files ── wrangler deploy
+```
+
+- Most data is queried live from the portal's Arranger GraphQL API through the Worker, which caches identical queries.
+- Viral loads are the exception: the API cannot average values, so a nightly job downloads the RT-PCR records and writes small JSON files that ship with the site.
+- Only `/api/*` and `/tiles/*` run the Worker (`run_worker_first` in `wrangler.toml`). All other requests are free static-asset requests. No KV, D1 or R2; only the Cache API.
+
+## Environments
+
+| | Staging | Production |
+|---|---|---|
+| Domain | `imicroseq-dashboard.bfjia.net` | `dashboard.imicroseq-dataportal.ca` |
+| Worker name | `imicroseq-dashboard` | `dashboard-imicroseq-dataportal-ca` (`[env.production]`) |
+| Repo | `bfjia/iMicroSeq_Dashboard` (this one) | a separate production repo |
+| Deploy command (Workers Builds setting) | `npx wrangler deploy --env=""` | `npx wrangler deploy --env production` |
+
+Going to production is a pull request from this repo into the production repo, not a file copy. Never run `--env production` from this repo: the old production Worker keeps serving the production domain until cutover. See `docs/SOP.md`, section 9.
+
+## Request flow per page
+
+| Panel | Source | Requests | Rule |
+|---|---|---|---|
+| At a Glance: hero cards, map, cumulative chart (default view), environmental sites stacked bar | `loadIndex()` in `public/js/index.js` | 1 GraphQL request, shared by all four | Hits total; site buckets with `top_hits` (lat, lon, province); organism, collecting organisation and environmental site buckets; date stats and daily histogram. A second block, filtered to the last `ACTIVE_DAYS`, gives the Recent Samples hero count and the active sites on the map. "Now" is rounded to UTC midnight so the cache key is stable all day. |
+| Monthly by organism | `monthlyByOrganism()` | 1 more (3 requests), when the Monthly button is pressed | One aliased aggregation block per calendar month (~175 blocks, ~0.5-0.8 s), through `aliasedMany`. Largest 7 organisms keep a colour, the rest are "Other". |
+| Map | `public/js/map.js` | 0 extra (reuses the index query), plus map tiles | One marker per location: sites at the same coordinates share a marker sized by their total samples, whose tooltip lists each site. Sites with no usable GPS (175 of 670 when measured: "Not Provided", "Restricted Access" or blank in the sampled record) sit at the province capital from `public/data/ProvinceCapitalCoords.csv`. Samples with no site (~19,662) are not shown and not counted on the page. Click a marker: a popup lists its sites, each with a viral loads link (`dashboard.html?site=<name>#viral`, only for sites with at least `MAP_VIRAL_MIN_SAMPLES` (10) samples) and a portal link (`PORTAL_EXPLORER_URL?filters=<SQON on data.geo_loc_name_site>`, the stored value). |
+| Explorer | `public/js/dashboard.js` | 1 "dimensions" request, then 1 per chart | Dimensions: buckets per field, date stats, daily histogram. Category x category: one aliased block per top-7 segment value plus one "Other" block. Time axis: one block per period. All through `aliasedMany`. Values differing only by ontology suffix are merged. Totals match the dimension totals exactly. Segments are drawn at least 0.6% of the tallest bar (`MIN_SHARE`) so tiny ones still show their colour; tooltips and table show true counts. |
+| Data quality checks | `public/qa.html`, `public/js/qa.js`; linked from the Interactive Dashboard footer (old `dashboard.html?qa=1` links redirect) | 1 field-list request (`configs { extended }`: every `data.*` field with its type), then 1+ per check as it scrolls into view and on each dropdown change, + `public/data/viral/meta.json` | A sticky "Only this collecting organisation" bar (`QA_FILTER_FIELD`, URL `org`) adds that filter to every live query (blocks `and` it with their own conditions; on change, drawn reports redraw); viral measurements say they are not filtered. Field dropdowns list every portal field (key fields first); "Group by" uses `QA_GROUP_FIELDS`, largest `QA_MAX_GROUPS` (60) groups. Blank = the exact `__missing__` bucket; "not provided" = `NULL_TERMS` among the top 200 buckets (exact below 200 values); recorded = the rest; numbers and dates use `stats.count`. Completeness: key (`COMPLETENESS_FIELDS`, `REQUIRED_FIELDS` marked) or all fields, one request. By group: one aliased block per group value. Latest sample: one block per group with date `stats.max`. Field profile: buckets (max 5,000) with value patterns (`valuePattern`) and spellings; numbers/dates: stats, then a histogram (~40-60 bins), dates also count after today. Over time: one block per year or month (date histogram gives the period totals), top 5-7 values coloured. One value per item: one block per value of whichever field has fewer values (max 1,000), names compared after `trimBrackets`. Spelling: values in `QA_NAME_FIELDS` equal after `trimBrackets`, lower case and collapsed spaces, plus values with ";" outside brackets. Coordinates: site buckets with `top_hits`, `parseCoord` per site. Viral measurements: counts the nightly build writes to `public/data/viral/meta.json`. Many-block queries go through `aliasedMany` (80 blocks per request, under the proxy's 64 KB body limit). |
+| Viral loads | `public/js/viral.js` | `public/data/viral/index.json` (no-cache) + 1 data file per selection (`?v=<generatedAt>`) + 1 live request for the stored province, city, site and assay values (portal links only; the chart draws without links if it fails) | Static files from `public/data/viral/`, built nightly. Default view: Alberta / All / All / Influenza A virus / all genes / C/ml, last 12 months. |
+
+Each panel loads when it scrolls near the viewport (`whenVisible`). Identical queries in one page view are memoised (`public/js/api.js`).
+
+## Worker
+
+`cf-worker/index.ts`.
+
+| Route | Behaviour |
+|---|---|
+| `POST /api/graphql` | Forwards to the portal Arranger endpoint. Cache key = SHA-256 of the body. Stores only 200 responses without GraphQL `errors`, for 3600 s. Sets `x-cache: HIT` or `MISS` and `x-fetched-at` (shown in the footer). Rejects non-POST (405), bodies over 64 KB (413) and any body containing `mutation` (400). Cloudflare compresses the response. |
+| `GET /tiles/light_all/{z}/{x}/{y}{r}.png` | Fetches the CARTO basemap tile with `CARTO_API_KEY`, cached at the edge for a week; errors are not cached. Returns 503 if the secret is missing, 404 for out-of-range tiles. |
+| anything else | `ASSETS` (static files). |
+| cron `30 8 * * *` (`[triggers]` in `wrangler.toml`) | POSTs to the `DEPLOY_HOOK_URL` secret, which starts a Workers Build of `main`. Logs an error if the secret is missing or the hook fails. |
+
+If the proxy fails, `public/js/api.js` calls the portal API directly, retrying once after 0.8 s. Static headers (browser cache lifetimes) are in `public/_headers`.
+
+## Nightly pipeline
+
+Cloudflare Workers Builds, connected to the repo in the Cloudflare dashboard (settings live there, not in the repo; see `docs/SOP.md`, section 3). Triggers: every push to `main`, and the Worker's nightly cron calling the deploy hook. Non-production branch builds are off. No deploy token is stored in GitHub.
+
+1. Clone `main`; Node 24 from `.nvmrc`; install dependencies from `package-lock.json`.
+2. Build command `npm run build`: `npm test`, then `npm run build:data` runs `scripts/build-viral-loads.mjs` (~10 minutes; 227,138 RT-PCR rows, paging slows from ~0.5 s to ~6 s per page partway through).
+3. Deploy command `npx wrangler deploy --env=""` (production: `--env production`).
+
+Failure behaviour: if any step fails (for example the build finds a different row count than the API reported), nothing deploys and the site keeps the previous data. The build also writes to a temporary folder and swaps it in only on success. Builds are stopped after 20 minutes, so a very slow portal API means a missed night, not a broken site.
+
+Build output (`public/data/viral/`, gitignored): 420 files in the last full build (315 site, 92 city, 12 province, 1 index), plus `public/data/viral/meta.json` from now on, 9.4 MB raw, ~2.5 MB gzipped. Peak build memory ~217 MB. Values are rounded to 4 significant digits.
+
+| File | Content |
+|---|---|
+| `public/data/viral/meta.json` | `{generatedAt, records, qa}`. The footer on every page reads the date; the data quality checks read `qa`. |
+| `public/data/viral/index.json` | `{generatedAt, records, p:[{n,id,t,c:[{n,id,t,s:[{n,id,t}]}]}], lookup}`. `p` is province > city > site; `t` = `{organism:{gene:[units]}}`; `lookup` maps site name to `[province, city]`. |
+| `public/data/viral/site/<id>.json` | `{organism:{gene:{unit:{d:[dates], v:[[values]], r?:[[ratios]]}}}}` |
+| `public/data/viral/city/<id>.json`, `public/data/viral/province/<id>.json` | Same shape, but `v[i]` and `r[i]` are `[n, sum, sumsq]` (`r[i]` is 0 when none) so groups combine exactly |
+
+PMMoV ratios (`r`) currently exist only for Ontario (175 of 303 sites).
+
+## Data rules
+
+Shared by the browser and the build in `public/js/rules.js`; constants in `public/js/config.js`.
+
+| Rule | Detail |
+|---|---|
+| `trimBrackets` | Removes ontology suffixes: `Alberta [GAZ:00002560]` becomes `Alberta`. |
+| Null terms | `NULL_TERMS` (Not Provided, Not Applicable, Not Collected, Missing, Restricted Access, `__missing__`, blank) are excluded from hero counts. The old site counted them: sites 672 to 670, organisms 6 to 5, data sources 24 to 23. |
+| Viral assay | Only `VIRAL_ASSAY` (RT-PCR) records. |
+| Target organism | A blank target taxon counts as SARS-CoV-2. |
+| Viral blanks | In the viral files, a blank or null-term city, site, gene or unit is one "(blank)" option, shown as "Not Provided" (`blankName()`). Provinces keep "Not Applicable", which the menu leaves out. |
+| SARS-CoV-2 cap | Values above `SARS2_MAX` (2000) are dropped before averaging. The cap ignores units; kept from the old site. |
+| Plottable values | Numeric text only. |
+| Averages | Per-date mean and SEM. "All" views combine `[n, sum, sumsq]` exactly. |
+| LOESS | Tricube weights, degree 2, span `LOESS_SPAN` (0.2) for one site and `LOESS_SPAN_AREA` (0.1) when several sites are combined (city or site "All"); the old site used 0.2 throughout and identical to R `loess(surface = "direct")`. Viewers can change the span on the page, within `LOESS_SPAN_MIN` to `LOESS_SPAN_MAX` (0.05 to 1). Fitted values are clamped at 0 and drawn as a monotone curve (smooth, never overshoots). With few points (e.g. 52 weekly dates with Full-series off) each local fit uses ~10 neighbours, so the curve follows the data closely. R reference scripts in `scripts/smoothing/`. |
+| PMMoV normalisation | Target value divided by the mean of the same record's PMMoV values above 0 in the same unit. A record without PMMoV uses the mean PMMoV (above 0, same unit) of the records from the same site, collection date and collecting organisation, since many labs report PMMoV as its own record. **Awaiting scientific sign-off**, so there is no switch: `?norm_pmmov=1` turns it on, with a note on what was divided and which dates have PMMoV. |
+
+Known data caveats: catchment population is empty (0% recorded, so per-capita rates are not offered); viral lineage is filled for only ~44 records; measurement units are mixed.
+
+## Charts
+
+- Palette (`PALETTE`): 8 colours validated for colour-blind separation, brand blue `#4A63E7` first. "Other" is gray (`OTHER_COLOR`). Never more than 8 series.
+- Every chart has a legend or tooltip and a "Show data table" view with a "Download CSV" button (`dataTable()` in `public/js/charts.js`).
+- Portal links: clicking a bar or point opens those records in the portal explorer in a new tab (`PORTAL_EXPLORER_URL?filters=<SQON>`; touch screens: first tap shows the tooltip, second tap opens). Rows carry `link` from `linkTo(sqon)`; `embed()` handles the click, also through the crosshair (voronoi) layers; aggregated charts add `detail: link`. Tooltips end with a "Data portal" line (`LINK_TIP`, "–" when there is no link) and tables have a "Data portal" column (`LINK_COL`, left out of the CSV). Filters use the stored values (every ontology-id spelling of a label); "Other" = the values not shown on their own; periods are `>=`/`<` epoch-ms date ranges. Viral points link to the RT-PCR records at that place on that date where one of the 3 target slots matches the organism (blank or null term = SARS-CoV-2, as in the build), gene (unless All) and unit chosen (`or` over the slots); names renamed in the portal since the last build have no link. QA: completeness states (blank = `__missing__`, not provided = the null terms among the buckets read, recorded = `not` both), groups, values, histogram bins, field over time; not the coordinates check, viral measurement values, or the table-only checks. Number and date fields get no state links.
+- URL state, so a view can be shared by copying the address: explorer `x`, `seg`, `pct`; QA `org`, `fields`, `gfield`, `group`, `lgroup`, `profile`, `tfield`, `period`, `each`, `one`; viral `province`, `city`, `site`, `organism`, `gene`, `unit`, `from`, `to`, `norm`, `log`, `span`. Each page script touches only its own keys.
+
+## Files map
+
+| Path | Purpose |
+|---|---|
+| `public/index.html`, `public/js/index.js`, `public/js/map.js` | At a Glance page |
+| `public/dashboard.html`, `public/js/dashboard.js` | Explorer, viral loads container |
+| `public/qa.html`, `public/js/qa.js` | Data quality checks page |
+| `public/js/viral.js` | Viral loads panel (styles are in `public/styles.css`) |
+| `public/js/config.js` | Every setting a maintainer changes |
+| `public/js/api.js` | GraphQL client, SQON helpers, aliased queries, field list |
+| `public/js/rules.js` | Data rules shared with the build |
+| `public/js/charts.js` | Vega config, panels, tables, URL state, footer |
+| `public/styles.css` | Global styles |
+| `public/_headers` | Browser cache headers |
+| `public/data/` | `public/data/CAN.geo.json`, `public/data/ProvinceCapitalCoords.csv`, generated `public/data/viral/` |
+| `cf-worker/index.ts` | Worker |
+| `scripts/build-viral-loads.mjs` | Nightly viral build |
+| `scripts/smoothing/` | R LOESS reference scripts |
+| `wrangler.toml` | Worker name, domains, assets, `run_worker_first` |
+| `test/` | Tests |
+
+## Secrets
+
+| Secret | Where | Used for |
+|---|---|---|
+| `CARTO_API_KEY` | Worker secret, set per Worker (environment); `.dev.vars` locally (gitignored) | Basemap tiles |
+| `DEPLOY_HOOK_URL` | Worker secret, set per Worker | Nightly rebuild (anyone with the URL can start a build) |
+
+Deploy credentials are managed by Cloudflare (Workers Builds); the Cloudflare GitHub app has read access to the repo.
+
+Never put a key in `public/` or commit it. Who rotates them: `<fill in: name or role>`.
+
+## Free-tier budget
+
+| Limit | Value | Use here |
+|---|---|---|
+| Worker requests | 100,000 per day | Mostly map tiles, ~15-25 per map view; plus uncached GraphQL queries |
+| Worker CPU | 10 ms per request | Proxy and tile code is light |
+| Static files | 20,000 | One file per viral site, city and province, plus the pages; count them after a build (`find public -type f \| wc -l`) |
+| Workers Builds | 3,000 build minutes per month, 20 minutes per build, 1 at a time | ~15 minutes per build, ~500 minutes per month (nightly plus merges) |
+| Cron triggers | 5 per account | 1 |
+
+At the request limit, data queries fall back to the portal API directly (slower, uncompressed) and basemap tiles fail. Static pages keep working. 
+
+### Request size and splitting
+
+Per-month queries grow by ~350 bytes per month of data (175 months in Nov 2026: one request would be ~62-69 KB). Over the proxy's 64 KB limit the proxy answers 413 and the page falls back to the portal API directly, uncached and slower; that is what made explorer redraws slow before they used `aliasedMany`. Every query with one block per period or value must use `aliasedMany` (80 blocks per request, ~30 KB, sent in parallel).
+
+The chunk size is a trade-off, measured cold in Nov 2026: 15 blocks took ~130 ms, 80 blocks ~330-390 ms, plus a fixed ~50-60 ms per request. Smaller chunks (e.g. 40) might cut a first, uncached view from ~0.4 s to ~0.25 s, but the portal does the same total work, just more of it at once, on a shared service; and once cached (1 hour) every chunk answers in ~10-20 ms. Revisit if the data grows a lot (many more months or values) or uncached views get slow: try 40, measure, and watch for upstream errors or rate limiting.
+
+## Arranger API quirks
+
+- Aggregation fields are `data__<field>`; SQON field names are `data.<field>`.
+- Dates filter as epoch milliseconds and only have stats and histogram, no buckets.
+- Filters must be groups (`and`); `filter_by_term` needs a group; `op: 'not'` works.
+- The offset window is 10,000 rows, so paging uses `searchAfter` with a total sort (date, then sample id).
+- 1,000-row sorted pages take ~0.6 s; 5,000-row pages time out.
+- Responses arrive uncompressed with no cache headers, which is why the proxy exists.
+
+## Testing
+
+`npm test` runs `node --test "test/*.test.js"`; every Workers Build runs it first (`npm run build`).
+
+| File | Covers |
+|---|---|
+| `test/rules.test.js` | `trimBrackets`, null terms, coordinates, viral rules, stats merging, date keys, `slug` |
+| `test/viral.test.js` | LOESS against the old implementation, series and stats merging, record parsing, PMMoV ratio, build output tree and ids, chart spec |
+| `test/docs.test.js` | Every relative link and backticked file path in `README.md`, `CLAUDE.md` and `docs/*.md` exists |
